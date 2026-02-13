@@ -10,6 +10,8 @@ class ServerSettings(BaseSettings):
     request_timeout_sec: int = Field(default=600)
     job_poll_interval_ms: int = Field(default=300)
     job_max_wait_sec: int = Field(default=600)
+    cors_allow_origins: str = Field(default="")  # comma-separated
+    cors_allow_credentials: bool = Field(default=False)
 
 class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DLLM_WORKER_", env_file=".env", extra="ignore")

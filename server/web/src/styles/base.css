@@ -1,0 +1,96 @@
+*{ box-sizing: border-box; }
+html, body { height: 100%; }
+body{
+  margin: 0;
+  font-family: var(--md-sys-font);
+  color: var(--md-sys-color-on-surface);
+  background: linear-gradient(180deg, #faf8ff, #ffffff);
+}
+
+a { color: inherit; text-decoration: none; }
+button, input { font-family: inherit; }
+
+.card{
+  background: var(--md-sys-color-surface);
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: var(--md-sys-shape-corner);
+  box-shadow: var(--md-sys-elev-1);
+}
+.card.pad{ padding: 14px; }
+
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: var(--md-sys-color-surface-variant);
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.chip.dot::before{
+  content:"";
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--md-sys-color-secondary);
+  display:inline-block;
+}
+.chip.ok.dot::before{ background: #1a7f37; }
+.chip.warn.dot::before{ background: #b15f00; }
+.chip.err.dot::before{ background: var(--md-sys-color-error); }
+
+.btn{
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  cursor: pointer;
+  box-shadow: var(--md-sys-elev-1);
+  transition: transform .08s ease, filter .18s ease;
+}
+.btn:active{ transform: translateY(1px); }
+.btn.ghost{
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid rgba(0,0,0,.12);
+}
+
+.input{
+  width: 100%;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 999px;
+  padding: 10px 12px;
+  outline: none;
+  background: #fff;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.input:focus{
+  border-color: rgba(103,80,164,.65);
+  box-shadow: 0 0 0 4px rgba(103,80,164,.12);
+}
+
+.table{
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th, .table td{
+  text-align: left;
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  font-size: 13px;
+}
+.table th{ font-size: 12px; color: rgba(0,0,0,.62); font-weight: 600; }
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+.skeleton{
+  background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.10), rgba(0,0,0,.06));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+  border-radius: 10px;
+}
+@keyframes shimmer{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: -200% 0; }
+}

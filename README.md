@@ -46,3 +46,14 @@ curl http://<server-ip>:8000/v1/chat/completions   -H "Authorization: Bearer dev
 - Electricity price provider is pluggable:
   - default fallback price `0.2` (currency/kWh)
   - optional: set `DLLM_WORKER_ELECTRICITY_URL` to a local service returning `{"price_per_kwh": 0.18}`
+
+## Admin endpoints (for Admin UI)
+These endpoints require `Authorization: Bearer <api_key>`:
+- GET `/admin/workers`
+- GET `/admin/workers/{worker_id}`
+- GET `/admin/jobs`
+- GET `/admin/jobs/{job_id}`
+
+## Optional CORS (for browser-based UI)
+- `DLLM_SERVER_CORS_ALLOW_ORIGINS` (comma-separated, e.g. `http://localhost:5173,https://admin.example.com`)
+- `DLLM_SERVER_CORS_ALLOW_CREDENTIALS` (`true`/`false`)
