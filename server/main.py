@@ -8,7 +8,7 @@ from server.background.heartbeat_timeout_checker import start_heartbeat_cleanup
 from server.key_manager.service import ApiKeyService
 from shared.config import ServerSettings
 
-app = FastAPI(title="Distributed LLM Server (Pull Workers)", version="0.2.0")
+app = FastAPI(title="Distributed LLM Server", version="0.2.0")
 
 settings = ServerSettings()
 if settings.cors_allow_origins:
