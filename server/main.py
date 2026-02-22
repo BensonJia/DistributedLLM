@@ -5,6 +5,7 @@ from server.api.openai_compat import router as openai_router
 from server.api.worker_mgmt import router as worker_router
 from server.api.admin import router as admin_router
 from server.background.heartbeat_timeout_checker import start_heartbeat_cleanup
+from server.background.request_assigner import start_request_assigner
 from server.key_manager.service import ApiKeyService
 from shared.config import ServerSettings
 
@@ -33,6 +34,7 @@ def startup():
         finally:
             db.close()
     start_heartbeat_cleanup()
+    start_request_assigner()
 
 app.include_router(openai_router)
 app.include_router(worker_router)

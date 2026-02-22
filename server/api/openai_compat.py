@@ -10,12 +10,12 @@ from shared.schemas import (
     OpenAIModelList,
     OpenAIModelCard,
 )
-from shared.utils import now_ts, new_job_id
+from shared.utils import now_ts, new_job_id, new_req_id
 from server.deps import get_db, SessionLocal
 from server.api.auth_middleware import require_api_key
-from server.scheduler.service import SchedulerService
 from server.worker_registry.service import WorkerService
 from server.job_queue.service import JobService
+from server.request_queue.service import AwaitingRequestService
 from shared.config import ServerSettings
 
 router = APIRouter()
@@ -28,33 +28,55 @@ def list_models(_: str = Depends(require_api_key), db: Session = Depends(get_db)
 @router.post("/v1/chat/completions", response_model=OpenAIChatCompletionResponse)
 async def chat_completions(req: OpenAIChatCompletionRequest, _: str = Depends(require_api_key), db: Session = Depends(get_db)):
     settings = ServerSettings()
-    scheduler = SchedulerService(db)
     worker_svc = WorkerService(db)
     job_svc = JobService(db)
+    req_svc = AwaitingRequestService(db)
+    req_id = new_req_id()
 
-    selected = scheduler.pick_worker(req.model)
-    if not selected:
-        raise HTTPException(status_code=503, detail=f"No available worker for model={req.model}")
+    # Enqueue the request
+    req_svc.create(
+        req_id=req_id,
+        model_name=req.model,
+        payload=req.model_dump_json()
+    )
 
-    job_id = new_job_id()
-    worker_svc.set_job(selected.worker_id, job_id)
-
-    payload = {
-        "job_id": job_id,
-        "model": req.model,
-        "messages": [m.model_dump() for m in req.messages],
-        "temperature": req.temperature,
-        "top_p": req.top_p,
-        "max_tokens": req.max_tokens,
-        "stream": req.stream,
-    }
-    job_svc.create(job_id=job_id, model=req.model, assigned_worker_id=selected.worker_id, payload=payload)
-
-    deadline = time.time() + float(settings.job_max_wait_sec)
+    # Poll for assignment
+    deadline = time.time() + 30.0  # 30 second timeout for worker assignment
     poll = max(0.05, float(settings.job_poll_interval_ms) / 1000.0)
+    assigned_worker_id = None
 
     try:
         while time.time() < deadline:
+            await asyncio.sleep(poll)
+            db2 = SessionLocal()
+            try:
+                awaiting_req = AwaitingRequestService(db2).get(req_id)
+                if awaiting_req and awaiting_req.assigned_worker_id:
+                    assigned_worker_id = awaiting_req.assigned_worker_id
+                    break
+            finally:
+                db2.close()
+
+        if not assigned_worker_id:
+            raise HTTPException(status_code=503, detail=f"No available worker for model={req.model} within 30s")
+
+        job_id = new_job_id()
+        worker_svc.set_job(assigned_worker_id, job_id)
+
+        payload = {
+            "job_id": job_id,
+            "model": req.model,
+            "messages": [m.model_dump() for m in req.messages],
+            "temperature": req.temperature,
+            "top_p": req.top_p,
+            "max_tokens": req.max_tokens,
+            "stream": req.stream,
+        }
+        job_svc.create(job_id=job_id, model=req.model, assigned_worker_id=assigned_worker_id, payload=payload)
+
+        # Poll for job completion
+        job_deadline = time.time() + float(settings.job_max_wait_sec)
+        while time.time() < job_deadline:
             await asyncio.sleep(poll)
             db2 = SessionLocal()
             try:
@@ -82,5 +104,9 @@ async def chat_completions(req: OpenAIChatCompletionRequest, _: str = Depends(re
                 db2.close()
 
         raise HTTPException(status_code=504, detail="Job timed out waiting for worker")
+
     finally:
-        worker_svc.set_job(selected.worker_id, None)
+        # Clean up the awaiting request and the worker's job assignment
+        req_svc.delete(req_id)
+        if assigned_worker_id:
+            worker_svc.set_job(assigned_worker_id, None)

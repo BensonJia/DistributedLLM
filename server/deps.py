@@ -10,6 +10,7 @@ def init_db():
     from server.key_manager import models as _  # noqa
     from server.worker_registry import models as _  # noqa
     from server.job_queue import models as _  # noqa
+    from server.request_queue import models as _ # noqa
     Base.metadata.create_all(bind=_engine)
 
 def get_db():
