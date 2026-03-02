@@ -40,3 +40,19 @@ export interface JobDetail extends JobSummary {
   result?: JobResult | null;
   error?: string | null;
 }
+
+export interface ClusterNode {
+  node_id: string;
+  base_url: string;
+  revision: number;
+  is_self: boolean;
+  is_alive: boolean;
+  models: string[];
+  idle_workers: number;
+  busy_workers: number;
+  latency_ms?: number | null;
+  last_probe_at?: string | null;
+  last_seen_at?: string | null;
+  state_version: number;
+  updated_at?: string | null;
+}

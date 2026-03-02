@@ -26,7 +26,7 @@ def start_request_assigner():
             for req in pending_reqs:
                 selected = scheduler.pick_worker(req.model_name)
                 if selected:
-                    worker_id, _ = selected
+                    worker_id = selected.worker_id
                     logger.info(f"Assigning worker {worker_id} to request {req.req_id} for model {req.model_name}")
                     req_service.assign_worker(req.req_id, worker_id)
         except Exception:

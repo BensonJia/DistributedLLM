@@ -33,6 +33,10 @@ function go(path: string){
         <span class="ic">🧾</span>
         任务管理
       </button>
+      <button class="item" :class="{ active: route.path.startsWith('/cluster') }" @click="go('/cluster')">
+        <span class="ic">🌐</span>
+        集群节点
+      </button>
     </nav>
 
     <div class="hint">

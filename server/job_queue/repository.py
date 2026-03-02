@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json, datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, update
 from .models import Job
 
 class JobRepository:
@@ -22,19 +22,26 @@ class JobRepository:
         return obj
 
     def lease_next_for_worker(self, worker_id: str) -> Job | None:
-        stmt = (
-            select(Job)
+        now = datetime.datetime.utcnow()
+        target_id = (
+            select(Job.id)
             .where(Job.status == "pending", Job.assigned_worker_id == worker_id)
             .order_by(Job.created_at.asc())
             .limit(1)
+            .scalar_subquery()
+        )
+        # Atomic lease: claim exactly one pending row and return it.
+        stmt = (
+            update(Job)
+            .where(Job.id == target_id, Job.status == "pending")
+            .values(status="running", updated_at=now)
+            .returning(Job)
         )
         job = self.db.execute(stmt).scalar_one_or_none()
         if not job:
+            self.db.rollback()
             return None
-        job.status = "running"
-        job.updated_at = datetime.datetime.utcnow()
         self.db.commit()
-        self.db.refresh(job)
         return job
 
     def complete_job(self, job_id: str, result: dict, error: str | None = None) -> Job | None:

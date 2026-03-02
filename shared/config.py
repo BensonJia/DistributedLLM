@@ -2,9 +2,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 class ServerSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="DLLM_SERVER_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="DLLM_SERVER_", env_file=(".server_env", ".env"), extra="ignore")
     db_url: str = Field(default="sqlite:///./server.db")
     api_keys_bootstrap: str = Field(default="")
+    internal_token: str = Field(default="")
     heartbeat_timeout_sec: int = Field(default=60)
     cleanup_interval_sec: int = Field(default=30)
     request_timeout_sec: int = Field(default=600)
@@ -12,10 +13,25 @@ class ServerSettings(BaseSettings):
     job_max_wait_sec: int = Field(default=600)
     cors_allow_origins: str = Field(default="")  # comma-separated
     cors_allow_credentials: bool = Field(default=False)
+    cluster_enabled: bool = Field(default=False)
+    cluster_node_id: str = Field(default="node-local")
+    cluster_self_url: str = Field(default="http://127.0.0.1:8000")
+    cluster_seed_urls: str = Field(default="")
+    cluster_neighbor_count: int = Field(default=3)
+    cluster_gossip_fanout: int = Field(default=2)
+    cluster_gossip_interval_sec: int = Field(default=3)
+    cluster_gossip_timeout_sec: float = Field(default=2.5)
+    cluster_probe_timeout_sec: float = Field(default=1.5)
+    cluster_delta_batch_size: int = Field(default=200)
+    cluster_request_forward_after_sec: float = Field(default=2.0)
+    cluster_request_forward_timeout_sec: float = Field(default=20.0)
+    cluster_request_max_hops: int = Field(default=2)
+    cluster_request_max_candidates: int = Field(default=3)
 
 class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DLLM_WORKER_", env_file=".env", extra="ignore")
     server_url: str = Field(default="http://127.0.0.1:8000")
+    internal_token: str = Field(default="")
     listen_port: int = Field(default=9001)
     ollama_url: str = Field(default="http://127.0.0.1:11434")
     worker_data_dir: str = Field(default="./.worker_data")

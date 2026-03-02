@@ -35,14 +35,14 @@ async def ensure_worker_id() -> str:
     if wid:
         _worker_id = wid
         return wid
-    wid = await register_worker(settings.server_url)
+    wid = await register_worker(settings.server_url, settings.internal_token)
     storage.save_worker_id(wid)
     _worker_id = wid
     return wid
 
 async def heartbeat_loop():
     assert _worker_id is not None
-    reporter = HeartbeatReporter(settings.server_url)
+    reporter = HeartbeatReporter(settings.server_url, settings.internal_token)
     while True:
         try:
             state = await collector.collect()
@@ -57,7 +57,7 @@ async def startup():
     global _hb_task, _job_task
     wid = await ensure_worker_id()
     _hb_task = asyncio.create_task(heartbeat_loop())
-    job_client = JobPullClient(settings.server_url)
+    job_client = JobPullClient(settings.server_url, settings.internal_token)
     runner = JobRunner(settings, job_client, infer, collector)
     _job_task = asyncio.create_task(runner.loop(wid))
 

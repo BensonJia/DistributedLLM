@@ -39,6 +39,16 @@ class WorkerRepository:
         self.db.commit()
         return obj
 
+    def clear_job_if_matches(self, worker_id: str, expected_job_id: str):
+        obj = self.db.get(Worker, worker_id)
+        if not obj:
+            return None
+        if obj.current_job_id != expected_job_id:
+            return obj
+        obj.current_job_id = None
+        self.db.commit()
+        return obj
+
     def replace_worker_models(self, worker_id: str, models: list[tuple[str, float]]):
         self.db.execute(delete(WorkerModel).where(WorkerModel.worker_id == worker_id))
         for name, cost in models:
@@ -46,7 +56,12 @@ class WorkerRepository:
         self.db.commit()
 
     def list_models_union(self) -> list[str]:
-        rows = self.db.execute(select(WorkerModel.model_name).distinct()).all()
+        rows = self.db.execute(
+            select(WorkerModel.model_name)
+            .join(Worker, Worker.worker_id == WorkerModel.worker_id)
+            .where(Worker.status == "online")
+            .distinct()
+        ).all()
         return sorted({r[0] for r in rows if r[0]})
 
     def get_candidate_workers(self, model_name: str):
@@ -60,3 +75,12 @@ class WorkerRepository:
             )
         )
         return self.db.execute(stmt).all()
+
+    def has_online_model(self, model_name: str) -> bool:
+        stmt = (
+            select(WorkerModel.id)
+            .join(Worker, Worker.worker_id == WorkerModel.worker_id)
+            .where(Worker.status == "online", WorkerModel.model_name == model_name)
+            .limit(1)
+        )
+        return self.db.execute(stmt).first() is not None

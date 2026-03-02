@@ -77,3 +77,37 @@ class OpenAIChatCompletionResponse(BaseModel):
     model: str
     choices: List[OpenAIChoice]
     usage: OpenAIUsage
+
+
+class ClusterNodeEntry(BaseModel):
+    node_id: str
+    base_url: str
+    revision: int = 0
+    is_alive: bool = True
+    models: List[str] = Field(default_factory=list)
+    idle_workers: int = 0
+    busy_workers: int = 0
+    tombstone: bool = False
+    updated_at_ts: int = 0
+    state_version: int = 0
+    latency_ms: Optional[float] = None
+
+
+class ClusterGossipRequest(BaseModel):
+    sender_node_id: str
+    sender_base_url: str
+    sender_revision: int = 0
+    sender_models: List[str] = Field(default_factory=list)
+    sender_idle_workers: int = 0
+    sender_busy_workers: int = 0
+    sender_tombstone: bool = False
+    sender_since_state_version: int = 0
+    entries: List[ClusterNodeEntry] = Field(default_factory=list)
+
+
+class ClusterGossipResponse(BaseModel):
+    ok: bool = True
+    receiver_node_id: str
+    receiver_state_version: int = 0
+    max_state_version_sent: int = 0
+    entries: List[ClusterNodeEntry] = Field(default_factory=list)

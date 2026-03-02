@@ -3,13 +3,19 @@ import httpx
 from shared.schemas import WorkerHeartbeat, WorkerModelInfo
 
 class HeartbeatReporter:
-    def __init__(self, server_url: str):
+    def __init__(self, server_url: str, internal_token: str = ""):
         self.server_url = server_url.rstrip("/")
+        self.internal_token = internal_token
+
+    def _headers(self) -> dict[str, str] | None:
+        if not self.internal_token:
+            return None
+        return {"X-Worker-Token": self.internal_token}
 
     async def send(self, hb: WorkerHeartbeat):
         url = self.server_url + "/internal/worker/heartbeat"
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(url, json=hb.model_dump())
+            r = await client.post(url, json=hb.model_dump(), headers=self._headers())
             r.raise_for_status()
             return r.json()
 

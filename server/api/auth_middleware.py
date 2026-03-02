@@ -1,7 +1,9 @@
+import secrets
 from fastapi import Header, HTTPException, Depends
 from sqlalchemy.orm import Session
 from server.deps import get_db
 from server.key_manager.service import ApiKeyService
+from shared.config import ServerSettings
 
 def get_bearer_token(authorization: str | None = Header(default=None)) -> str:
     if not authorization:
@@ -15,3 +17,11 @@ def require_api_key(token: str = Depends(get_bearer_token), db: Session = Depend
     if not ApiKeyService(db).verify(token):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return token
+
+def require_internal_token(x_worker_token: str | None = Header(default=None, alias="X-Worker-Token")):
+    expected = ServerSettings().internal_token
+    if not expected:
+        return ""
+    if not x_worker_token or not secrets.compare_digest(x_worker_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid worker token")
+    return x_worker_token

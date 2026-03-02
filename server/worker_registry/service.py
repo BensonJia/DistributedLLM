@@ -19,5 +19,11 @@ class WorkerService:
     def set_job(self, worker_id: str, job_id: str | None):
         return self.repo.set_job(worker_id, job_id)
 
+    def clear_job_if_matches(self, worker_id: str, expected_job_id: str):
+        return self.repo.clear_job_if_matches(worker_id, expected_job_id)
+
     def list_models_union(self):
         return self.repo.list_models_union()
+
+    def has_online_model(self, model_name: str) -> bool:
+        return self.repo.has_online_model(model_name)

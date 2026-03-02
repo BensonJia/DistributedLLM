@@ -12,6 +12,7 @@ from server.deps import get_db
 from server.api.auth_middleware import require_api_key
 from server.worker_registry.models import Worker, WorkerModel
 from server.job_queue.models import Job
+from server.cluster.models import ClusterNode
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -98,3 +99,32 @@ def get_job(job_id: str, _: str = Depends(require_api_key), db: Session = Depend
         "result": result,
         "error": job.error,
     }
+
+
+@router.get("/cluster/nodes")
+def list_cluster_nodes(_: str = Depends(require_api_key), db: Session = Depends(get_db)) -> List[dict]:
+    rows = db.execute(select(ClusterNode).order_by(ClusterNode.is_self.desc(), ClusterNode.node_id.asc())).scalars().all()
+    out: List[dict] = []
+    for n in rows:
+        try:
+            models = json.loads(n.models_json or "[]")
+        except Exception:
+            models = []
+        out.append(
+            {
+                "node_id": n.node_id,
+                "base_url": n.base_url,
+                "revision": int(n.revision),
+                "is_self": bool(n.is_self),
+                "is_alive": bool(n.is_alive),
+                "models": models if isinstance(models, list) else [],
+                "idle_workers": int(n.idle_workers),
+                "busy_workers": int(n.busy_workers),
+                "latency_ms": float(n.latency_ms) if n.latency_ms is not None else None,
+                "last_probe_at": _iso(n.last_probe_at),
+                "last_seen_at": _iso(n.last_seen_at),
+                "state_version": int(n.state_version),
+                "updated_at": _iso(n.updated_at),
+            }
+        )
+    return out

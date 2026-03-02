@@ -1,9 +1,10 @@
 import { USE_MOCK } from "./env";
 import { httpJson } from "./http";
-import type { WorkerDetail, WorkerSummary, JobDetail, JobSummary } from "@/types";
+import type { WorkerDetail, WorkerSummary, JobDetail, JobSummary, ClusterNode } from "@/types";
 
 type WorkersResp = { workers: WorkerDetail[] };
 type JobsResp = { jobs: JobDetail[] };
+type ClusterNodesResp = { nodes: ClusterNode[] };
 
 async function mockJson<T>(path: string): Promise<T>{
   const res = await fetch(path);
@@ -64,5 +65,13 @@ export const api = {
       return found;
     }
     return await httpJson<JobDetail>(`/admin/jobs/${encodeURIComponent(job_id)}`, { method: "GET" });
+  },
+
+  async listClusterNodes(): Promise<ClusterNode[]>{
+    if (USE_MOCK){
+      const data = await mockJson<ClusterNodesResp>("/mock/cluster_nodes.json");
+      return data.nodes;
+    }
+    return await httpJson<ClusterNode[]>("/admin/cluster/nodes", { method: "GET" });
   }
 };
