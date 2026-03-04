@@ -59,12 +59,13 @@ function copy(text: string){
           <div class="k">模型与价格</div>
           <table class="table" v-if="w.models?.length">
             <thead>
-              <tr><th>模型</th><th>cost_per_token</th></tr>
+              <tr><th>模型</th><th>cost_per_token</th><th>speed_tps</th></tr>
             </thead>
             <tbody>
               <tr v-for="m in [...w.models].sort((a,b)=>a.cost_per_token-b.cost_per_token)" :key="m.name">
                 <td class="mono">{{ m.name }}</td>
                 <td class="mono">{{ fmtCost(m.cost_per_token) }}</td>
+                <td class="mono">{{ m.speed_tps != null ? Number(m.speed_tps).toFixed(2) : "—" }}</td>
               </tr>
             </tbody>
           </table>

@@ -12,6 +12,18 @@ class WorkerService:
         self.repo.upsert_worker(hb.worker_id, status="online", current_job_id=current_job)
         models = [(m.name, float(m.cost_per_token)) for m in hb.models]
         self.repo.replace_worker_models(hb.worker_id, models)
+        speeds = hb.meta.get("model_speeds_tps") if isinstance(hb.meta, dict) else {}
+        if not isinstance(speeds, dict):
+            speeds = {}
+        normalized: dict[str, float] = {}
+        for name, value in speeds.items():
+            if not name:
+                continue
+            try:
+                normalized[str(name)] = float(value)
+            except Exception:
+                continue
+        self.repo.replace_worker_model_speeds(hb.worker_id, normalized)
 
     def mark_offline_stale(self, cutoff_dt):
         return self.repo.set_offline_if_stale(cutoff_dt)

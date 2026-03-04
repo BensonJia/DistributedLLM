@@ -1,6 +1,15 @@
 from __future__ import annotations
 import httpx
 
+
+class ConstantElectricityPrice:
+    def __init__(self, price_per_kwh: float):
+        self.price_per_kwh = float(price_per_kwh)
+
+    async def get_price_per_kwh(self) -> float:
+        return self.price_per_kwh
+
+
 class HttpElectricityPrice:
     def __init__(self, url: str, fallback: float):
         self.url = url

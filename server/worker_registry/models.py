@@ -21,3 +21,13 @@ class WorkerModel(Base):
     model_name: Mapped[str] = mapped_column(String, index=True)
     cost_per_token: Mapped[float] = mapped_column(Float, default=0.0)
     worker = relationship("Worker", back_populates="models")
+
+
+class WorkerModelStat(Base):
+    __tablename__ = "worker_model_stats"
+    __table_args__ = (UniqueConstraint("worker_id", "model_name", name="uq_worker_model_stat"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    worker_id: Mapped[str] = mapped_column(String, ForeignKey("workers.worker_id"), index=True)
+    model_name: Mapped[str] = mapped_column(String, index=True)
+    speed_tps: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, index=True)

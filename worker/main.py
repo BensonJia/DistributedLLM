@@ -6,7 +6,8 @@ from worker.worker_core.local_storage import LocalStorage
 from worker.worker_core.registration import register as register_worker
 from worker.ollama_adapter.client import OllamaClient
 from worker.ollama_adapter.inference import OllamaInference
-from worker.cost_engine.electricity_api import HttpElectricityPrice
+from worker.cost_engine.electricity_api import ConstantElectricityPrice
+from worker.cost_engine.power_api import ConstantPowerMeter
 from worker.cost_engine.calculator import CostCalculator
 from worker.heartbeat.state_collector import StateCollector
 from worker.heartbeat.reporter import HeartbeatReporter, build_heartbeat
@@ -20,8 +21,9 @@ settings = WorkerSettings()
 storage = LocalStorage(settings.worker_data_dir)
 
 ollama = OllamaClient(settings.ollama_url)
-price_provider = HttpElectricityPrice(settings.electricity_url, settings.electricity_fallback_price_per_kwh)
-cost_calc = CostCalculator(settings, price_provider)
+price_provider = ConstantElectricityPrice(settings.electricity_fallback_price_per_kwh)
+power_meter = ConstantPowerMeter(settings.host_power_watts)
+cost_calc = CostCalculator(settings, price_provider, power_meter)
 collector = StateCollector(ollama, cost_calc)
 infer = OllamaInference(ollama)
 
@@ -46,7 +48,14 @@ async def heartbeat_loop():
     while True:
         try:
             state = await collector.collect()
-            hb = build_heartbeat(_worker_id, state, meta={"ollama_url": settings.ollama_url})
+            hb = build_heartbeat(
+                _worker_id,
+                state,
+                meta={
+                    "ollama_url": settings.ollama_url,
+                    "model_speeds_tps": state.model_speeds_tps,
+                },
+            )
             await reporter.send(hb)
         except Exception:
             pass
@@ -58,7 +67,7 @@ async def startup():
     wid = await ensure_worker_id()
     _hb_task = asyncio.create_task(heartbeat_loop())
     job_client = JobPullClient(settings.server_url, settings.internal_token)
-    runner = JobRunner(settings, job_client, infer, collector)
+    runner = JobRunner(settings, job_client, infer, collector, cost_calc)
     _job_task = asyncio.create_task(runner.loop(wid))
 
 @app.on_event("shutdown")

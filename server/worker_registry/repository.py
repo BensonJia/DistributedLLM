@@ -1,7 +1,7 @@
 from __future__ import annotations
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
-from .models import Worker, WorkerModel
+from .models import Worker, WorkerModel, WorkerModelStat
 import datetime
 
 class WorkerRepository:
@@ -53,6 +53,23 @@ class WorkerRepository:
         self.db.execute(delete(WorkerModel).where(WorkerModel.worker_id == worker_id))
         for name, cost in models:
             self.db.add(WorkerModel(worker_id=worker_id, model_name=name, cost_per_token=cost))
+        self.db.commit()
+
+    def replace_worker_model_speeds(self, worker_id: str, model_speeds_tps: dict[str, float]):
+        self.db.execute(delete(WorkerModelStat).where(WorkerModelStat.worker_id == worker_id))
+        now = datetime.datetime.utcnow()
+        for name, speed in model_speeds_tps.items():
+            v = float(speed)
+            if not name or v <= 0:
+                continue
+            self.db.add(
+                WorkerModelStat(
+                    worker_id=worker_id,
+                    model_name=name,
+                    speed_tps=v,
+                    updated_at=now,
+                )
+            )
         self.db.commit()
 
     def list_models_union(self) -> list[str]:

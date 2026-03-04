@@ -8,6 +8,7 @@ class WorkerState:
     status: str
     current_job_id: str | None
     models: list[tuple[str, float]]
+    model_speeds_tps: dict[str, float]
     loaded_model: str | None
 
 class StateCollector:
@@ -25,8 +26,18 @@ class StateCollector:
         tags = await self.ollama.list_models()
         names = [m.get("name") for m in tags if m.get("name")]
         models = []
+        model_speeds_tps: dict[str, float] = {}
         for name in names:
             c = await self.cost_calc.cost_per_token(name)
             models.append((name, c))
+            speed = self.cost_calc.get_model_speed_tps(name)
+            if speed:
+                model_speeds_tps[name] = float(speed)
         status = "busy" if self._current_job_id else "idle"
-        return WorkerState(status=status, current_job_id=self._current_job_id, models=models, loaded_model=self._loaded_model)
+        return WorkerState(
+            status=status,
+            current_job_id=self._current_job_id,
+            models=models,
+            model_speeds_tps=model_speeds_tps,
+            loaded_model=self._loaded_model,
+        )

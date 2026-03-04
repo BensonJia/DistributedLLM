@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from server.deps import get_db
 from server.api.auth_middleware import require_api_key
-from server.worker_registry.models import Worker, WorkerModel
+from server.worker_registry.models import Worker, WorkerModel, WorkerModelStat
 from server.job_queue.models import Job
 from server.cluster.models import ClusterNode
 
@@ -43,11 +43,23 @@ def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = 
     if not wobj:
         raise HTTPException(status_code=404, detail="worker not found")
 
-    models = db.execute(
+    model_rows = db.execute(
         select(WorkerModel.model_name, WorkerModel.cost_per_token)
         .where(WorkerModel.worker_id == worker_id)
         .order_by(WorkerModel.model_name.asc())
     ).all()
+    speed_rows = db.execute(
+        select(WorkerModelStat.model_name, WorkerModelStat.speed_tps)
+        .where(WorkerModelStat.worker_id == worker_id)
+    ).all()
+    speed_map = {str(name): float(speed) for name, speed in speed_rows if name}
+    models = []
+    for name, cost in model_rows:
+        item = {"name": name, "cost_per_token": float(cost)}
+        speed = speed_map.get(str(name))
+        if speed is not None:
+            item["speed_tps"] = speed
+        models.append(item)
 
     return {
         "worker_id": wobj.worker_id,
@@ -55,7 +67,7 @@ def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = 
         "work_state": _work_state(wobj),
         "current_job_id": wobj.current_job_id,
         "last_heartbeat": _iso(wobj.last_heartbeat),
-        "models": [{"name": n, "cost_per_token": float(c)} for n, c in models],
+        "models": models,
     }
 
 @router.get("/jobs")

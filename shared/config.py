@@ -41,3 +41,4 @@ class WorkerSettings(BaseSettings):
     electricity_fallback_price_per_kwh: float = Field(default=0.20)
     base_cost_per_token: float = Field(default=1e-7)
     model_size_multiplier: float = Field(default=1.0)
+    host_power_watts: float = Field(default=250.0)

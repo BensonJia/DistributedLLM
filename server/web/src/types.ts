@@ -4,6 +4,7 @@ export type WorkerWorkState = "idle" | "busy";
 export interface WorkerModelInfo {
   name: string;
   cost_per_token: number;
+  speed_tps?: number;
 }
 
 export interface WorkerSummary {

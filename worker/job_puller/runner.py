@@ -1,16 +1,26 @@
 from __future__ import annotations
 import asyncio
+import time
 from shared.config import WorkerSettings
 from shared.schemas import WorkerJobCompleteRequest
+from worker.cost_engine.calculator import CostCalculator
 from worker.job_puller.client import JobPullClient
 from worker.ollama_adapter.inference import OllamaInference
 
 class JobRunner:
-    def __init__(self, settings: WorkerSettings, client: JobPullClient, infer: OllamaInference, collector):
+    def __init__(
+        self,
+        settings: WorkerSettings,
+        client: JobPullClient,
+        infer: OllamaInference,
+        collector,
+        cost_calc: CostCalculator,
+    ):
         self.settings = settings
         self.client = client
         self.infer = infer
         self.collector = collector
+        self.cost_calc = cost_calc
 
     async def loop(self, worker_id: str):
         while True:
@@ -25,6 +35,7 @@ class JobRunner:
 
             self.collector.set_job(job.job_id, loaded_model=job.model)
             try:
+                started = time.perf_counter()
                 text, pt, ct, tt = await self.infer.chat(
                     model=job.model,
                     messages=job.messages,
@@ -32,6 +43,8 @@ class JobRunner:
                     top_p=job.top_p,
                     max_tokens=job.max_tokens,
                 )
+                elapsed = time.perf_counter() - started
+                self.cost_calc.record_inference_speed(job.model, tt, elapsed)
                 comp = WorkerJobCompleteRequest(
                     worker_id=worker_id,
                     job_id=job.job_id,
