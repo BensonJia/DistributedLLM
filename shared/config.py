@@ -32,6 +32,10 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DLLM_WORKER_", env_file=".env", extra="ignore")
     server_url: str = Field(default="http://127.0.0.1:8000")
     internal_token: str = Field(default="")
+    debug: bool = Field(default=False)
+    startup_env_keys: str = Field(
+        default="DLLM_WORKER_SERVER_URL,DLLM_WORKER_OLLAMA_URL,DLLM_WORKER_LISTEN_PORT,DLLM_WORKER_DEBUG"
+    )
     listen_port: int = Field(default=9001)
     ollama_url: str = Field(default="http://127.0.0.1:11434")
     worker_data_dir: str = Field(default="./.worker_data")

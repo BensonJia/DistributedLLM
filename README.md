@@ -1,26 +1,132 @@
-﻿# DistributedLLM
+# DistributedLLM
 
 基于 FastAPI + Ollama 的分布式推理系统：
-- `server` 提供 OpenAI 兼容接口（`/v1/models`、`/v1/chat/completions`）
-- `worker` 通过心跳 + 主动拉取任务执行推理（NAT 友好）
-- 可选 Docker 一键部署 `server + web`
+- `server`：OpenAI 兼容接口、任务调度、集群同步
+- `worker`：模型探测、心跳上报、主动拉取任务执行
+- `web`：管理界面（与 server 同机 Docker 部署）
 
-## 1. 目录说明
+## 1. 目录结构
 
-- `server/`：调度、队列、API、集群逻辑
-- `worker/`：模型探测、推理执行、心跳上报、任务拉取
+- `server/`：API、调度、集群逻辑
+- `worker/`：Worker 运行逻辑
 - `shared/`：配置与公共 schema
-- `scripts/`：Docker 部署脚本
-- `docker-compose.server.yml`：Server + Web 的 Compose 编排
+- `scripts/`：Docker 一键部署脚本
+- `docker-compose.server.yml`：`dllm-server + dllm-web` 编排
 
-## 2. Server 手动部署
+## 2. 推荐部署方式（Docker，一键）
 
 ### 2.1 前置条件
 
-1. Python 3.10+（建议 3.12）
-2. 可写数据库路径（默认 SQLite）
+1. Docker
+2. Docker Compose（`docker compose`）
+3. 服务器开放端口（默认）：
+- `8000`：Server API
+- `5173`：Web
 
-### 2.2 安装依赖
+### 2.2 最小部署步骤
+
+1. 在仓库根目录准备 `.server_env`（见第 4 节模板）
+2. 执行脚本：
+
+Linux/macOS/Git Bash
+```bash
+bash scripts/deploy_server_docker.sh
+```
+
+PowerShell
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_server_docker.ps1
+```
+
+3. 验证：
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+访问 Web：
+- `http://<服务器IP>:5173`
+
+## 3. 新服务器部署前要先设计的信息
+
+1. 认证与密钥
+- `DLLM_SERVER_API_KEYS_BOOTSTRAP`：Server Bearer Key（可多个，逗号分隔）
+- `DLLM_SERVER_INTERNAL_TOKEN`：Worker/Cluster 内部令牌
+- `VITE_API_KEY`：Web 调 `/admin/*` 的 Key（建议与 Server Key 一致）
+
+2. 网络与 CORS
+- Web 默认调用 `VITE_API_BASE=/api`（同源路径）
+- Web 容器默认代理到 `VITE_PROXY_TARGET=http://dllm-server:8000`（容器内服务名通信，不依赖公网 IP）
+- `DLLM_SERVER_CORS_ALLOW_ORIGINS` 必须覆盖你实际访问 Web 的 Origin（协议 + 主机 + 端口）
+
+3. 数据持久化
+- 推荐 `DLLM_SERVER_DB_URL=sqlite:///./data/server.db`
+- 宿主机目录 `./data/server` 会挂载到容器 `/app/data`
+
+4. 集群（可选）
+- `DLLM_SERVER_CLUSTER_ENABLED` 是否启用
+- `NODE_IP` 用于生成 `cluster_self_url`
+- 多节点时建议手工维护 `DLLM_SERVER_CLUSTER_SEED_URLS`
+
+## 4. `.server_env` 推荐模板（单机）
+
+```env
+# ===== Required in production =====
+DLLM_SERVER_API_KEYS_BOOTSTRAP=replace-with-strong-api-key
+DLLM_SERVER_INTERNAL_TOKEN=replace-with-strong-internal-token
+VITE_API_KEY=replace-with-strong-api-key
+
+# ===== Server =====
+DLLM_SERVER_DB_URL=sqlite:///./data/server.db
+DLLM_SERVER_PORT=8000
+
+# ===== Web =====
+DLLM_WEB_PORT=5173
+VITE_API_BASE=/api
+VITE_PROXY_TARGET=http://dllm-server:8000
+VITE_USE_MOCK=false
+
+# ===== Network/CORS =====
+NODE_IP=127.0.0.1
+NODE_INTERNAL_IP=127.0.0.1
+DLLM_SERVER_CORS_ALLOW_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+DLLM_SERVER_CORS_ALLOW_CREDENTIALS=false
+
+# ===== Cluster =====
+DLLM_SERVER_CLUSTER_ENABLED=true
+```
+
+## 5. 如何在部署时手动指定 token
+
+Linux/macOS/Git Bash：
+```bash
+DLLM_SERVER_API_KEYS_BOOTSTRAP="your-server-api-key" \
+DLLM_SERVER_INTERNAL_TOKEN="your-internal-token" \
+VITE_API_KEY="your-web-api-key" \
+bash scripts/deploy_server_docker.sh
+```
+
+PowerShell：
+```powershell
+$env:DLLM_SERVER_API_KEYS_BOOTSTRAP="your-server-api-key"
+$env:DLLM_SERVER_INTERNAL_TOKEN="your-internal-token"
+$env:VITE_API_KEY="your-web-api-key"
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_server_docker.ps1
+```
+
+说明：
+- 如果你没传，脚本会用默认值/自动值（例如 `dev-key-123`、随机内部 token）。
+- 脚本执行完成后会打印配置摘要（包含原始认证字段）。
+
+## 6. 手工 Compose 部署
+
+```bash
+docker compose --env-file .server_env -f docker-compose.server.yml up -d --build
+docker compose --env-file .server_env -f docker-compose.server.yml down
+```
+
+## 7. 非 Docker Server 启动（开发）
+
+### 7.1 安装依赖
 
 ```bash
 python -m venv .venv
@@ -29,200 +135,54 @@ pip install -r requirements.txt
 ```
 
 Windows PowerShell：
-
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2.3 配置 `.server_env`
-
-在仓库根目录创建 `.server_env`（至少建议填这两项）：
-
-```env
-DLLM_SERVER_DB_URL=sqlite:///./server.db
-DLLM_SERVER_API_KEYS_BOOTSTRAP=dev-key-123
-```
-
-如果你启用了内部鉴权，还要加：
-
-```env
-DLLM_SERVER_INTERNAL_TOKEN=replace-with-a-strong-token
-```
-
-### 2.4 启动 Server
+### 7.2 启动
 
 ```bash
 uvicorn server.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 2.5 验证
+## 8. Worker 部署
 
-```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/v1/models -H "Authorization: Bearer dev-key-123"
-```
-
-## 3. Server Docker 部署
-
-### 3.1 前置条件
-
-1. Docker
-2. Docker Compose（`docker compose`）
-
-### 3.2 方式 A：使用脚本一键部署（推荐）
-
-Linux/macOS/Git Bash：
-
-```bash
-bash scripts/deploy_server_docker.sh
-```
-
-PowerShell：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\deploy_server_docker.ps1
-```
-
-脚本会自动生成或更新根目录 `.server_env`，并执行：
-
-```bash
-docker compose --env-file .server_env -f docker-compose.server.yml up -d --build
-```
-
-脚本写入 `.server_env` 时的关键行为：
-- 默认将 `DLLM_SERVER_CLUSTER_ENABLED` 设为 `true`
-- 自动生成 `DLLM_SERVER_CLUSTER_NODE_ID`
-- 自动设置 `DLLM_SERVER_CLUSTER_SELF_URL=http://<NODE_IP>:<DLLM_SERVER_PORT>`
-- 自动合并 `DLLM_SERVER_CLUSTER_SEED_URLS`，并包含默认邻居 `http://111.230.32.219:8000`
-
-### 3.3 方式 B：手工执行 compose
-
-1. 先准备 `.server_env`（至少应包含 `DLLM_SERVER_API_KEYS_BOOTSTRAP`，建议同时设置 `DLLM_SERVER_DB_URL=sqlite:///./data/server.db`）
-2. 启动：
-
-```bash
-docker compose --env-file .server_env -f docker-compose.server.yml up -d --build
-```
-
-3. 停止：
-
-```bash
-docker compose --env-file .server_env -f docker-compose.server.yml down
-```
-
-### 3.4 Docker 部署验证
-
-```bash
-docker compose -f docker-compose.server.yml ps
-curl http://127.0.0.1:8000/health
-```
-
-## 4. Worker 部署
-
-### 4.1 前置条件
-
-1. 与 Server 相同版本的代码和 Python 依赖
-2. 本机可访问 Ollama（默认 `http://127.0.0.1:11434`）
-3. Ollama 已下载至少一个模型（例如 `qwen3:8b`）
-
-### 4.2 启动 Ollama（示例）
-
-```bash
-ollama serve
-ollama pull qwen3:8b
-```
-
-### 4.3 配置 Worker 环境变量
-
-最小配置：
+1. 确保本机可访问 Ollama（默认 `http://127.0.0.1:11434`）
+2. 设置最小环境变量：
 
 ```bash
 export DLLM_WORKER_SERVER_URL=http://<server-ip>:8000
 export DLLM_WORKER_OLLAMA_URL=http://127.0.0.1:11434
+export DLLM_WORKER_INTERNAL_TOKEN=<same-as-server-internal-token>
 ```
 
-若 Server 设置了 `DLLM_SERVER_INTERNAL_TOKEN`，Worker 必须配置同值：
-
-```bash
-export DLLM_WORKER_INTERNAL_TOKEN=replace-with-the-same-token
-```
-
-### 4.4 启动 Worker
+3. 启动 Worker：
 
 ```bash
 python -m uvicorn worker.main:app --host 0.0.0.0 --port 9001
 ```
 
-Worker 启动后会自动：
-1. 注册 worker_id
-2. 定时上报心跳
-3. 循环拉取并执行任务
+## 9. 常用验证与运维命令
 
-### 4.5 验证 Worker 是否接入
-
+健康检查：
 ```bash
-curl http://127.0.0.1:8000/admin/workers -H "Authorization: Bearer <your-api-key>"
+curl http://127.0.0.1:8000/health
 ```
 
-## 5. `.server_env` 允许参数与默认值
+查看容器状态：
+```bash
+docker compose -f docker-compose.server.yml ps
+```
 
-说明：
-- `ServerSettings` 读取 `.server_env` 和 `.env`（优先 `.server_env`），变量前缀为 `DLLM_SERVER_`
-- Docker Compose 也会读取 `.server_env`，用于端口映射和 Web 环境变量
-- 下表中的“代码默认值”来自 `shared/config.py`；“脚本默认值”来自 `scripts/deploy_server_docker.sh/.ps1`
+查看日志：
+```bash
+docker logs -f dllm-server
+docker logs -f dllm-web
+```
 
-### 5.1 Server 核心参数（`DLLM_SERVER_*`）
-
-| 参数 | 代码默认值 | 用途 |
-| --- | --- | --- |
-| `DLLM_SERVER_DB_URL` | `sqlite:///./server.db` | 数据库连接串 |
-| `DLLM_SERVER_API_KEYS_BOOTSTRAP` | `""` | 启动时导入 API Key（逗号分隔） |
-| `DLLM_SERVER_INTERNAL_TOKEN` | `""` | Worker/Cluster 内部接口令牌（`X-Worker-Token`） |
-| `DLLM_SERVER_HEARTBEAT_TIMEOUT_SEC` | `60` | 心跳超时判离线 |
-| `DLLM_SERVER_CLEANUP_INTERVAL_SEC` | `30` | 心跳清理任务周期 |
-| `DLLM_SERVER_REQUEST_TIMEOUT_SEC` | `600` | 请求分配等待超时 |
-| `DLLM_SERVER_JOB_POLL_INTERVAL_MS` | `300` | 请求端轮询间隔 |
-| `DLLM_SERVER_JOB_MAX_WAIT_SEC` | `600` | Job 完成等待超时 |
-| `DLLM_SERVER_CORS_ALLOW_ORIGINS` | `""` | CORS 来源白名单（逗号分隔） |
-| `DLLM_SERVER_CORS_ALLOW_CREDENTIALS` | `false` | 是否允许跨域携带凭据 |
-| `DLLM_SERVER_CLUSTER_ENABLED` | `false` | 是否启用集群 |
-| `DLLM_SERVER_CLUSTER_NODE_ID` | `node-local` | 当前节点 ID |
-| `DLLM_SERVER_CLUSTER_SELF_URL` | `http://127.0.0.1:8000` | 当前节点对外地址 |
-| `DLLM_SERVER_CLUSTER_SEED_URLS` | `""` | 种子节点列表（逗号分隔） |
-| `DLLM_SERVER_CLUSTER_NEIGHBOR_COUNT` | `3` | 探活邻居数 |
-| `DLLM_SERVER_CLUSTER_GOSSIP_FANOUT` | `2` | 每轮 gossip 扇出 |
-| `DLLM_SERVER_CLUSTER_GOSSIP_INTERVAL_SEC` | `3` | gossip 周期 |
-| `DLLM_SERVER_CLUSTER_GOSSIP_TIMEOUT_SEC` | `2.5` | gossip HTTP 超时 |
-| `DLLM_SERVER_CLUSTER_PROBE_TIMEOUT_SEC` | `1.5` | 探活超时 |
-| `DLLM_SERVER_CLUSTER_DELTA_BATCH_SIZE` | `200` | gossip 增量批大小 |
-| `DLLM_SERVER_CLUSTER_REQUEST_FORWARD_AFTER_SEC` | `2.0` | 本地等待后触发转发 |
-| `DLLM_SERVER_CLUSTER_REQUEST_FORWARD_TIMEOUT_SEC` | `20.0` | 转发请求超时 |
-| `DLLM_SERVER_CLUSTER_REQUEST_MAX_HOPS` | `2` | 最大转发跳数 |
-| `DLLM_SERVER_CLUSTER_REQUEST_MAX_CANDIDATES` | `3` | 单次最大候选转发数 |
-
-### 5.2 Docker/脚本相关参数（同样放在 `.server_env`）
-
-| 参数 | 脚本默认值 | 用途 |
-| --- | --- | --- |
-| `DLLM_SERVER_PORT` | `8000` | 容器内 `8000` 对外映射端口 |
-| `DLLM_WEB_PORT` | `5173` | Web 容器端口映射 |
-| `DOCKER_IMAGE_NAME` | `dllm-server:latest` | Server 镜像名 |
-| `DOCKER_CONTAINER_NAME` | `dllm-server` | Server 容器名 |
-| `DOCKER_WEB_CONTAINER_NAME` | `dllm-web` | Web 容器名 |
-| `NODE_IP` | `127.0.0.1` | 脚本生成 `cluster_self_url` 与 `VITE_API_BASE` |
-| `NODE_INTERNAL_IP` | `127.0.0.1` | 脚本生成 CORS 白名单 |
-| `VITE_API_BASE` | `http://<NODE_IP>:<DLLM_SERVER_PORT>` | Web 调用后端地址 |
-| `VITE_API_KEY` | `dev-key-123` | Web 调用 `/admin/*` 时的 Bearer Key |
-| `VITE_USE_MOCK` | `false` | Web 是否启用 mock |
-
-注意：
-- Docker 脚本默认会把 `DLLM_SERVER_DB_URL` 写成 `sqlite:///./data/server.db`（落在挂载卷 `./data/server`）
-- 如果你手动 compose 且未设置 `DLLM_SERVER_DB_URL`，代码默认将使用 `sqlite:///./server.db`（容器内路径）
-
-## 6. 常用接口验证
-
+验证 OpenAI 兼容接口：
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
@@ -233,3 +193,22 @@ curl http://127.0.0.1:8000/v1/chat/completions \
     "temperature": 0.2
   }'
 ```
+
+## 10. 关键参数速查
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DLLM_SERVER_DB_URL` | `sqlite:///./server.db` | Server 数据库 |
+| `DLLM_SERVER_API_KEYS_BOOTSTRAP` | `""`（代码）/`dev-key-123`（脚本） | 启动导入 API Keys |
+| `DLLM_SERVER_INTERNAL_TOKEN` | `""`（代码）/脚本可自动生成 | 内部鉴权 token |
+| `DLLM_SERVER_CORS_ALLOW_ORIGINS` | `""` | CORS 来源白名单 |
+| `DLLM_SERVER_CORS_ALLOW_CREDENTIALS` | `false` | 是否允许携带凭据 |
+| `DLLM_SERVER_CLUSTER_ENABLED` | `false`（代码）/`true`（脚本） | 是否启用集群 |
+| `DLLM_SERVER_CLUSTER_SELF_URL` | `http://127.0.0.1:8000` | 节点自身地址 |
+| `DLLM_SERVER_CLUSTER_SEED_URLS` | `""` | 种子节点列表 |
+| `DLLM_SERVER_PORT` | `8000` | 主机映射端口 |
+| `DLLM_WEB_PORT` | `5173` | Web 映射端口 |
+| `VITE_API_BASE` | `/api`（脚本） | Web 侧 API 基础路径 |
+| `VITE_PROXY_TARGET` | `http://dllm-server:8000`（脚本） | Web 容器内代理目标 |
+| `VITE_API_KEY` | `dev-key-123`（脚本） | Web 管理接口调用 key |
+| `VITE_USE_MOCK` | `false` | 是否开启 Web mock |

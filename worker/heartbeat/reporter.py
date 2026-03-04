@@ -1,11 +1,16 @@
 from __future__ import annotations
 import httpx
+import logging
 from shared.schemas import WorkerHeartbeat, WorkerModelInfo
 
+logger = logging.getLogger(__name__)
+
+
 class HeartbeatReporter:
-    def __init__(self, server_url: str, internal_token: str = ""):
+    def __init__(self, server_url: str, internal_token: str = "", debug: bool = False):
         self.server_url = server_url.rstrip("/")
         self.internal_token = internal_token
+        self.debug = debug
 
     def _headers(self) -> dict[str, str] | None:
         if not self.internal_token:
@@ -14,8 +19,17 @@ class HeartbeatReporter:
 
     async def send(self, hb: WorkerHeartbeat):
         url = self.server_url + "/internal/worker/heartbeat"
+        if self.debug:
+            logger.debug(
+                "Comm[heartbeat] request: worker_id=%s status=%s current_job_id=%s",
+                hb.worker_id,
+                hb.status,
+                hb.current_job_id,
+            )
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=hb.model_dump(), headers=self._headers())
+            if self.debug:
+                logger.debug("Comm[heartbeat] response: status=%s", r.status_code)
             r.raise_for_status()
             return r.json()
 

@@ -46,8 +46,9 @@ $viteUseMock = if ($env:VITE_USE_MOCK) { $env:VITE_USE_MOCK } elseif ($existing[
 $nodeIp = if ($env:NODE_IP) { $env:NODE_IP } elseif ($existing["NODE_IP"]) { $existing["NODE_IP"] } else { "127.0.0.1" }
 $nodeInternalIp = if ($env:NODE_INTERNAL_IP) { $env:NODE_INTERNAL_IP } elseif ($existing["NODE_INTERNAL_IP"]) { $existing["NODE_INTERNAL_IP"] } else { "127.0.0.1" }
 $clusterSelfUrl = "http://$nodeIp`:$serverPort"
-$viteApiBase = if ($env:VITE_API_BASE) { $env:VITE_API_BASE } elseif ($existing["VITE_API_BASE"]) { $existing["VITE_API_BASE"] } else { "http://$nodeIp`:$serverPort" }
-$corsAllowOrigins = if ($env:DLLM_SERVER_CORS_ALLOW_ORIGINS) { $env:DLLM_SERVER_CORS_ALLOW_ORIGINS } elseif ($existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"]) { $existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"] } else { "http://$nodeIp`:$webPort,http://$nodeInternalIp`:$webPort,http://127.0.0.1:$webPort,http://localhost:$webPort" }
+$viteApiBase = if ($env:VITE_API_BASE) { $env:VITE_API_BASE } elseif ($existing["VITE_API_BASE"]) { $existing["VITE_API_BASE"] } else { "/api" }
+$viteProxyTarget = if ($env:VITE_PROXY_TARGET) { $env:VITE_PROXY_TARGET } elseif ($existing["VITE_PROXY_TARGET"]) { $existing["VITE_PROXY_TARGET"] } else { "http://dllm-server:8000" }
+$corsAllowOrigins = if ($env:DLLM_SERVER_CORS_ALLOW_ORIGINS) { $env:DLLM_SERVER_CORS_ALLOW_ORIGINS } elseif ($existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"]) { $existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"] } else { "http://$nodeInternalIp`:$webPort,http://127.0.0.1:$webPort,http://localhost:$webPort" }
 $corsAllowCredentials = if ($env:DLLM_SERVER_CORS_ALLOW_CREDENTIALS) { $env:DLLM_SERVER_CORS_ALLOW_CREDENTIALS } elseif ($existing["DLLM_SERVER_CORS_ALLOW_CREDENTIALS"]) { $existing["DLLM_SERVER_CORS_ALLOW_CREDENTIALS"] } else { "false" }
 
 $internalToken = if ($existing["DLLM_SERVER_INTERNAL_TOKEN"]) { $existing["DLLM_SERVER_INTERNAL_TOKEN"] } elseif ($env:DLLM_SERVER_INTERNAL_TOKEN) { $env:DLLM_SERVER_INTERNAL_TOKEN } else { Get-RandomHex 48 }
@@ -81,6 +82,7 @@ $envLines = @(
     "DOCKER_WEB_CONTAINER_NAME=$dockerWebContainerName"
     "DLLM_WEB_PORT=$webPort"
     "VITE_API_BASE=$viteApiBase"
+    "VITE_PROXY_TARGET=$viteProxyTarget"
     "VITE_API_KEY=$viteApiKey"
     "VITE_USE_MOCK=$viteUseMock"
 )
@@ -102,3 +104,32 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host "Deploy complete."
 Write-Host "Node ID: $nodeId"
 Write-Host "Internal token persisted at $envPath"
+Write-Host ""
+Write-Host "=== Deployment Config Summary ==="
+Write-Host "ENV_FILE: $envPath"
+Write-Host "Server:"
+Write-Host "  image=$dockerImageName"
+Write-Host "  container=$dockerContainerName"
+Write-Host "  host_port=$serverPort"
+Write-Host "  cluster_enabled=$clusterEnabled"
+Write-Host "  cluster_self_url=$clusterSelfUrl"
+Write-Host "  cluster_seed_urls=$clusterSeedUrls"
+Write-Host "  db_url=$dbUrl"
+Write-Host "Web:"
+Write-Host "  container=$dockerWebContainerName"
+Write-Host "  host_port=$webPort"
+Write-Host "  vite_api_base=$viteApiBase"
+Write-Host "  vite_proxy_target=$viteProxyTarget"
+Write-Host "  vite_use_mock=$viteUseMock"
+Write-Host "Network/CORS:"
+Write-Host "  node_ip=$nodeIp"
+Write-Host "  node_internal_ip=$nodeInternalIp"
+Write-Host "  cors_allow_origins=$corsAllowOrigins"
+Write-Host "  cors_allow_credentials=$corsAllowCredentials"
+Write-Host "Auth:"
+Write-Host "  api_keys_bootstrap=$apiKey"
+Write-Host "  internal_token=$internalToken"
+Write-Host "  vite_api_key=$viteApiKey"
+Write-Host "Access URLs:"
+Write-Host "  server_health=http://127.0.0.1:$serverPort/health"
+Write-Host "  web=http://127.0.0.1:$webPort"

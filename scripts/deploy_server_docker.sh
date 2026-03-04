@@ -26,8 +26,9 @@ fi
 NODE_IP="${NODE_IP:-127.0.0.1}"
 NODE_INTERNAL_IP="${NODE_INTERNAL_IP:-127.0.0.1}"
 DLLM_SERVER_CLUSTER_SELF_URL="http://${NODE_IP}:${DLLM_SERVER_PORT}"
-VITE_API_BASE="${VITE_API_BASE:-http://${NODE_IP}:${DLLM_SERVER_PORT}}"
-DLLM_SERVER_CORS_ALLOW_ORIGINS="http://${NODE_IP}:${DLLM_WEB_PORT},http://${NODE_INTERNAL_IP}:${DLLM_WEB_PORT},http://127.0.0.1:${DLLM_WEB_PORT},http://localhost:${DLLM_WEB_PORT}"
+VITE_API_BASE="${VITE_API_BASE:-/api}"
+VITE_PROXY_TARGET="${VITE_PROXY_TARGET:-http://dllm-server:8000}"
+DLLM_SERVER_CORS_ALLOW_ORIGINS="${DLLM_SERVER_CORS_ALLOW_ORIGINS:-http://${NODE_INTERNAL_IP}:${DLLM_WEB_PORT},http://127.0.0.1:${DLLM_WEB_PORT},http://localhost:${DLLM_WEB_PORT}}"
 DLLM_SERVER_CORS_ALLOW_CREDENTIALS="${DLLM_SERVER_CORS_ALLOW_CREDENTIALS:-false}"
 
 if [ -n "${DLLM_SERVER_INTERNAL_TOKEN:-}" ]; then
@@ -66,6 +67,7 @@ DOCKER_CONTAINER_NAME=${DOCKER_CONTAINER_NAME}
 DOCKER_WEB_CONTAINER_NAME=${DOCKER_WEB_CONTAINER_NAME}
 DLLM_WEB_PORT=${DLLM_WEB_PORT}
 VITE_API_BASE=${VITE_API_BASE}
+VITE_PROXY_TARGET=${VITE_PROXY_TARGET}
 VITE_API_KEY=${VITE_API_KEY}
 VITE_USE_MOCK=${VITE_USE_MOCK}
 EOF
@@ -81,3 +83,32 @@ fi
 echo "Deploy complete."
 echo "Node ID: ${NODE_ID}"
 echo "Internal token persisted at ${ENV_FILE}"
+echo ""
+echo "=== Deployment Config Summary ==="
+echo "ENV_FILE: ${ENV_FILE}"
+echo "Server:"
+echo "  image=${DOCKER_IMAGE_NAME}"
+echo "  container=${DOCKER_CONTAINER_NAME}"
+echo "  host_port=${DLLM_SERVER_PORT}"
+echo "  cluster_enabled=${DLLM_SERVER_CLUSTER_ENABLED}"
+echo "  cluster_self_url=${DLLM_SERVER_CLUSTER_SELF_URL}"
+echo "  cluster_seed_urls=${DLLM_SERVER_CLUSTER_SEED_URLS}"
+echo "  db_url=${DLLM_SERVER_DB_URL}"
+echo "Web:"
+echo "  container=${DOCKER_WEB_CONTAINER_NAME}"
+echo "  host_port=${DLLM_WEB_PORT}"
+echo "  vite_api_base=${VITE_API_BASE}"
+echo "  vite_proxy_target=${VITE_PROXY_TARGET}"
+echo "  vite_use_mock=${VITE_USE_MOCK}"
+echo "Network/CORS:"
+echo "  node_ip=${NODE_IP}"
+echo "  node_internal_ip=${NODE_INTERNAL_IP}"
+echo "  cors_allow_origins=${DLLM_SERVER_CORS_ALLOW_ORIGINS}"
+echo "  cors_allow_credentials=${DLLM_SERVER_CORS_ALLOW_CREDENTIALS}"
+echo "Auth:"
+echo "  api_keys_bootstrap=${DLLM_SERVER_API_KEYS_BOOTSTRAP}"
+echo "  internal_token=${INTERNAL_TOKEN}"
+echo "  vite_api_key=${VITE_API_KEY}"
+echo "Access URLs:"
+echo "  server_health=http://127.0.0.1:${DLLM_SERVER_PORT}/health"
+echo "  web=http://127.0.0.1:${DLLM_WEB_PORT}"

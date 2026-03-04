@@ -21,7 +21,8 @@ services:
     env_file:
       - .server_env
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-http://127.0.0.1:8000}
+      VITE_API_BASE: ${VITE_API_BASE:-/api}
+      VITE_PROXY_TARGET: ${VITE_PROXY_TARGET:-http://dllm-server:8000}
       VITE_API_KEY: ${VITE_API_KEY:-}
       VITE_USE_MOCK: ${VITE_USE_MOCK:-false}
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port ${DLLM_WEB_PORT:-5173}"
