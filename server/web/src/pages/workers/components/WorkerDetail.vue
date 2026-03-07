@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useWorkersStore } from "@/stores/workers";
-import { fmtCost } from "@/utils/format";
+import { fmtCost, fmtWatts } from "@/utils/format";
 import { formatIso, formatRelTime } from "@/utils/time";
 import { useUiStore } from "@/stores/ui";
 
@@ -32,7 +32,7 @@ function copy(text: string){
     <div v-if="!w" class="skeleton" style="height: 220px;"></div>
 
     <template v-else>
-      <div class="head">
+      <div class="head" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="h">
           <div class="mono">{{ w.worker_id }}</div>
           <button class="mini" @click="copy(w.worker_id)">复制</button>
@@ -46,7 +46,7 @@ function copy(text: string){
       </div>
 
       <div class="grid">
-        <div class="card pad soft">
+        <div class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">
           <div class="k">工作状态</div>
           <div class="v">{{ w.work_state }}</div>
           <div class="k">在线状态</div>
@@ -55,16 +55,17 @@ function copy(text: string){
           <div class="v mono">{{ w.work_state==='busy' ? (w.current_job_id || '—') : '—' }}</div>
         </div>
 
-        <div class="card pad soft">
+        <div class="card pad soft" :class="{ 'updated-flash': store.selectedModelsUpdated }">
           <div class="k">模型与价格</div>
           <table class="table" v-if="w.models?.length">
             <thead>
-              <tr><th>模型</th><th>cost_per_token</th><th>speed_tps</th></tr>
+              <tr><th>模型</th><th>cost_per_token</th><th>avg_power</th><th>speed_tps</th></tr>
             </thead>
             <tbody>
               <tr v-for="m in [...w.models].sort((a,b)=>a.cost_per_token-b.cost_per_token)" :key="m.name">
                 <td class="mono">{{ m.name }}</td>
                 <td class="mono">{{ fmtCost(m.cost_per_token) }}</td>
+                <td class="mono">{{ fmtWatts(m.avg_power_watts) }}</td>
                 <td class="mono">{{ m.speed_tps != null ? Number(m.speed_tps).toFixed(2) : "—" }}</td>
               </tr>
             </tbody>

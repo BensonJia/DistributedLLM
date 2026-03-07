@@ -10,7 +10,16 @@ class WorkerService:
     def handle_heartbeat(self, hb: WorkerHeartbeat):
         current_job = hb.current_job_id if hb.status == "busy" else None
         self.repo.upsert_worker(hb.worker_id, status="online", current_job_id=current_job)
-        models = [(m.name, float(m.cost_per_token)) for m in hb.models]
+        models = []
+        for m in hb.models:
+            avg_power = None
+            if m.avg_power_watts is not None:
+                try:
+                    v = float(m.avg_power_watts)
+                    avg_power = v if v > 0 else None
+                except Exception:
+                    avg_power = None
+            models.append((m.name, float(m.cost_per_token), avg_power))
         self.repo.replace_worker_models(hb.worker_id, models)
         speeds = hb.meta.get("model_speeds_tps") if isinstance(hb.meta, dict) else {}
         if not isinstance(speeds, dict):

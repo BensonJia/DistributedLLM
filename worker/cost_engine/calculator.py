@@ -1,19 +1,20 @@
 from __future__ import annotations
 from shared.config import WorkerSettings
 from .electricity_api import ConstantElectricityPrice
-from .power_api import ConstantPowerMeter
+from .power_api import PowerMeterProtocol
 
 class CostCalculator:
     def __init__(
         self,
         settings: WorkerSettings,
         price_provider: ConstantElectricityPrice,
-        power_meter: ConstantPowerMeter,
+        power_meter: PowerMeterProtocol,
     ):
         self.settings = settings
         self.price_provider = price_provider
         self.power_meter = power_meter
         self._model_speed_tps: dict[str, float] = {}
+        self._model_avg_power_watts: dict[str, float] = {}
 
     def record_inference_speed(self, model_name: str, total_tokens: int, elapsed_sec: float) -> float | None:
         if total_tokens <= 0 or elapsed_sec <= 0:
@@ -26,6 +27,18 @@ class CostCalculator:
 
     def get_model_speed_tps(self, model_name: str) -> float | None:
         return self._model_speed_tps.get(model_name)
+
+    def record_model_avg_power(self, model_name: str, avg_power_watts: float) -> float | None:
+        if not model_name:
+            return None
+        power = float(avg_power_watts)
+        if power <= 0:
+            return None
+        self._model_avg_power_watts[model_name] = power
+        return power
+
+    def get_model_avg_power_watts(self, model_name: str) -> float | None:
+        return self._model_avg_power_watts.get(model_name)
 
     async def cost_per_token(self, model_name: str) -> float:
         speed = self._model_speed_tps.get(model_name)

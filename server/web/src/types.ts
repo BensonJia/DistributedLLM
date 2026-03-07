@@ -4,6 +4,7 @@ export type WorkerWorkState = "idle" | "busy";
 export interface WorkerModelInfo {
   name: string;
   cost_per_token: number;
+  avg_power_watts?: number | null;
   speed_tps?: number;
 }
 
@@ -35,6 +36,7 @@ export interface JobResult {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  avg_power_watts?: number | null;
 }
 
 export interface JobDetail extends JobSummary {

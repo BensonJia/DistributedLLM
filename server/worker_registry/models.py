@@ -20,6 +20,7 @@ class WorkerModel(Base):
     worker_id: Mapped[str] = mapped_column(String, ForeignKey("workers.worker_id"), index=True)
     model_name: Mapped[str] = mapped_column(String, index=True)
     cost_per_token: Mapped[float] = mapped_column(Float, default=0.0)
+    avg_power_watts: Mapped[float | None] = mapped_column(Float, nullable=True)
     worker = relationship("Worker", back_populates="models")
 
 

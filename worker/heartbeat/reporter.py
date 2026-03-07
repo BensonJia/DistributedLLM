@@ -38,7 +38,7 @@ def build_heartbeat(worker_id: str, state, meta: dict | None = None) -> WorkerHe
         worker_id=worker_id,
         status=state.status,
         current_job_id=state.current_job_id,
-        models=[WorkerModelInfo(name=n, cost_per_token=c) for n, c in state.models],
+        models=[WorkerModelInfo(name=n, cost_per_token=c, avg_power_watts=p) for n, c, p in state.models],
         loaded_model=state.loaded_model,
         meta=meta or {},
     )

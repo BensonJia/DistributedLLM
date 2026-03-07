@@ -49,10 +49,17 @@ class WorkerRepository:
         self.db.commit()
         return obj
 
-    def replace_worker_models(self, worker_id: str, models: list[tuple[str, float]]):
+    def replace_worker_models(self, worker_id: str, models: list[tuple[str, float, float | None]]):
         self.db.execute(delete(WorkerModel).where(WorkerModel.worker_id == worker_id))
-        for name, cost in models:
-            self.db.add(WorkerModel(worker_id=worker_id, model_name=name, cost_per_token=cost))
+        for name, cost, avg_power in models:
+            self.db.add(
+                WorkerModel(
+                    worker_id=worker_id,
+                    model_name=name,
+                    cost_per_token=cost,
+                    avg_power_watts=avg_power,
+                )
+            )
         self.db.commit()
 
     def replace_worker_model_speeds(self, worker_id: str, model_speeds_tps: dict[str, float]):

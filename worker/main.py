@@ -9,7 +9,15 @@ from worker.worker_core.registration import register as register_worker
 from worker.ollama_adapter.client import OllamaClient
 from worker.ollama_adapter.inference import OllamaInference
 from worker.cost_engine.electricity_api import ConstantElectricityPrice
-from worker.cost_engine.power_api import ConstantPowerMeter
+from worker.cost_engine.power_api import (
+    ActiveTaskRegistry,
+    LocalPowerApi,
+    LocalPowerMeter,
+    PlatformPowerReader,
+    TaskPowerAttributor,
+    router as power_router,
+    set_power_api_runtime,
+)
 from worker.cost_engine.calculator import CostCalculator
 from worker.heartbeat.state_collector import StateCollector
 from worker.heartbeat.reporter import HeartbeatReporter, build_heartbeat
@@ -25,10 +33,15 @@ storage = LocalStorage(settings.worker_data_dir)
 
 ollama = OllamaClient(settings.ollama_url)
 price_provider = ConstantElectricityPrice(settings.electricity_fallback_price_per_kwh)
-power_meter = ConstantPowerMeter(settings.host_power_watts)
+power_runtime = LocalPowerApi(PlatformPowerReader(settings.host_power_watts), interval_sec=1.0)
+set_power_api_runtime(power_runtime)
+power_meter = LocalPowerMeter(power_runtime, fallback_watts=settings.host_power_watts)
 cost_calc = CostCalculator(settings, price_provider, power_meter)
 collector = StateCollector(ollama, cost_calc)
 infer = OllamaInference(ollama)
+task_registry = ActiveTaskRegistry()
+power_ws_url = f"ws://127.0.0.1:{settings.listen_port}/internal/power/ws"
+power_attributor = TaskPowerAttributor(power_ws_url, task_registry, fallback_watts=settings.host_power_watts)
 
 _worker_id: str | None = None
 _hb_task: asyncio.Task | None = None
@@ -82,6 +95,7 @@ async def heartbeat_loop():
                 meta={
                     "ollama_url": settings.ollama_url,
                     "model_speeds_tps": state.model_speeds_tps,
+                    "model_avg_power_watts": state.model_avg_power_watts,
                 },
             )
             await reporter.send(hb)
@@ -95,11 +109,12 @@ async def startup():
     _enable_debug_logging()
     logger.info("Worker startup: server_url=%s ollama_url=%s", settings.server_url, settings.ollama_url)
     _log_startup_env()
+    await power_runtime.start()
     wid = await ensure_worker_id()
     logger.info("Worker id=%s", wid)
     _hb_task = asyncio.create_task(heartbeat_loop())
     job_client = JobPullClient(settings.server_url, settings.internal_token, debug=settings.debug)
-    runner = JobRunner(settings, job_client, infer, collector, cost_calc)
+    runner = JobRunner(settings, job_client, infer, collector, cost_calc, power_attributor=power_attributor)
     _job_task = asyncio.create_task(runner.loop(wid))
 
 @app.on_event("shutdown")
@@ -112,5 +127,7 @@ async def shutdown():
                 await t
             except Exception:
                 pass
+    await power_runtime.stop()
 
 app.include_router(health_router)
+app.include_router(power_router)

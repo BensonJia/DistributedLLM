@@ -9,10 +9,17 @@ const store = useWorkersStore();
 const ui = useUiStore();
 
 let timer: number | undefined;
+let ticking = false;
 
 async function tick(){
-  await store.refreshList();
-  if (store.selectedId) await store.select(store.selectedId);
+  if (ticking) return;
+  ticking = true;
+  try{
+    await store.refreshList(store.loadedOnce);
+    if (store.selectedId) await store.refreshSelected(true);
+  }finally{
+    ticking = false;
+  }
 }
 
 onMounted(async () => {

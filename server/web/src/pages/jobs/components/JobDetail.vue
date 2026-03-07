@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useJobsStore } from "@/stores/jobs";
 import { formatIso } from "@/utils/time";
+import { fmtWatts } from "@/utils/format";
 import { useUiStore } from "@/stores/ui";
 
 const store = useJobsStore();
@@ -28,7 +29,7 @@ function copy(text: string){
     <div v-if="!j" class="skeleton" style="height: 240px;"></div>
 
     <template v-else>
-      <div class="head">
+      <div class="head" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="h">
           <div class="mono">{{ j.job_id }}</div>
           <button class="mini" @click="copy(j.job_id)">复制</button>
@@ -43,22 +44,22 @@ function copy(text: string){
         </div>
       </div>
 
-      <div v-if="j.status==='running'" class="card pad soft">
+      <div v-if="j.status==='running'" class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="k">执行中</div>
         <div class="p">Worker 正在处理该任务。</div>
       </div>
 
-      <div v-else-if="j.status==='pending'" class="card pad soft">
+      <div v-else-if="j.status==='pending'" class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="k">等待执行</div>
         <div class="p">任务已入队，等待 Worker 拉取。</div>
       </div>
 
-      <div v-else-if="j.status==='failed'" class="card pad soft errbox">
+      <div v-else-if="j.status==='failed'" class="card pad soft errbox" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="k">失败</div>
         <div class="p mono">{{ j.error || 'unknown error' }}</div>
       </div>
 
-      <div v-else class="card pad soft">
+      <div v-else class="card pad soft" :class="{ 'updated-flash': store.selectedResultUpdated }">
         <div class="row">
           <div class="k">结果</div>
           <button class="mini" @click="expanded=!expanded">{{ expanded ? "收起" : "展开" }}</button>
@@ -71,6 +72,8 @@ function copy(text: string){
             <div class="usage mono">
               prompt={{ j.result?.prompt_tokens ?? 0 }} · completion={{ j.result?.completion_tokens ?? 0 }} · total={{ j.result?.total_tokens ?? 0 }}
             </div>
+            <div class="k" style="margin-top: 10px;">推理平均功耗</div>
+            <div class="usage mono">{{ fmtWatts(j.result?.avg_power_watts) }}</div>
           </div>
         </transition>
       </div>

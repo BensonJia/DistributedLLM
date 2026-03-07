@@ -9,9 +9,16 @@ const store = useClustersStore();
 const ui = useUiStore();
 
 let timer: number | undefined;
+let ticking = false;
 
 async function tick(){
-  await store.refreshList();
+  if (ticking) return;
+  ticking = true;
+  try{
+    await store.refreshList(store.loadedOnce);
+  }finally{
+    ticking = false;
+  }
 }
 
 onMounted(async () => {
@@ -81,9 +88,9 @@ function latencyText(node: ClusterNode): string{
           <div class="sub">当前节点与所有已发现服务器节点连接关系</div>
         </div>
         <div class="stats">
-          <span class="chip dot">total {{ remoteNodes.length }}</span>
-          <span class="chip dot ok">alive {{ aliveCount }}</span>
-          <span class="chip dot err">offline {{ remoteNodes.length - aliveCount }}</span>
+          <span class="chip dot" :class="{ 'updated-flash': store.summaryUpdated }">total {{ remoteNodes.length }}</span>
+          <span class="chip dot ok" :class="{ 'updated-flash': store.summaryUpdated }">alive {{ aliveCount }}</span>
+          <span class="chip dot err" :class="{ 'updated-flash': store.summaryUpdated }">offline {{ remoteNodes.length - aliveCount }}</span>
         </div>
       </div>
 
@@ -114,7 +121,7 @@ function latencyText(node: ClusterNode): string{
           <text class="label sub" :x="graph.cx" :y="graph.cy + 16" text-anchor="middle">{{ shortNode(selfNode.node_id) }}</text>
 
           <g v-for="p in graph.points" :key="p.node.node_id">
-            <circle :class="['node', p.node.is_alive ? 'alive' : 'offline']" :cx="p.x" :cy="p.y" r="24" />
+            <circle :class="['node', p.node.is_alive ? 'alive' : 'offline', store.updatedNodeIds[p.node.node_id] ? 'updated-flash' : '']" :cx="p.x" :cy="p.y" r="24" />
             <text class="label" :x="p.x" :y="p.y - 34" text-anchor="middle">{{ p.shortId }}</text>
             <text class="label sub" :x="p.x" :y="p.y + 5" text-anchor="middle">{{ p.node.is_alive ? "UP" : "DOWN" }}</text>
           </g>
@@ -144,7 +151,7 @@ function latencyText(node: ClusterNode): string{
             </tr>
           </thead>
           <tbody>
-            <tr v-for="n in sortedNodes" :key="n.node_id">
+            <tr v-for="n in sortedNodes" :key="n.node_id" :class="{ 'updated-flash': store.updatedNodeIds[n.node_id] }">
               <td class="mono">{{ n.node_id }}</td>
               <td>
                 <span :class="['chip dot', n.is_alive ? 'ok' : 'err']">

@@ -1,0 +1,47 @@
+{
+  "workers": [
+    {
+      "worker_id": "a1b2c3d4e5f60123456789abcdef0001",
+      "status": "online",
+      "work_state": "idle",
+      "current_job_id": null,
+      "last_heartbeat": "2026-02-13T18:00:00Z",
+      "models": [
+        {
+          "name": "qwen3:8b",
+          "cost_per_token": 1.2e-07
+        },
+        {
+          "name": "llama3:8b",
+          "cost_per_token": 1.1e-07
+        }
+      ]
+    },
+    {
+      "worker_id": "a1b2c3d4e5f60123456789abcdef0002",
+      "status": "online",
+      "work_state": "busy",
+      "current_job_id": "job_deadbeefdeadbeefdeadbeefdeadbeef",
+      "last_heartbeat": "2026-02-13T18:00:02Z",
+      "models": [
+        {
+          "name": "qwen3:8b",
+          "cost_per_token": 1e-07
+        }
+      ]
+    },
+    {
+      "worker_id": "a1b2c3d4e5f60123456789abcdef0003",
+      "status": "offline",
+      "work_state": "idle",
+      "current_job_id": null,
+      "last_heartbeat": "2026-02-13T17:40:00Z",
+      "models": [
+        {
+          "name": "qwen3:8b",
+          "cost_per_token": 1.3e-07
+        }
+      ]
+    }
+  ]
+}

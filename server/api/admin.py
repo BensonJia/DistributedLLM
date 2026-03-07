@@ -44,7 +44,7 @@ def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = 
         raise HTTPException(status_code=404, detail="worker not found")
 
     model_rows = db.execute(
-        select(WorkerModel.model_name, WorkerModel.cost_per_token)
+        select(WorkerModel.model_name, WorkerModel.cost_per_token, WorkerModel.avg_power_watts)
         .where(WorkerModel.worker_id == worker_id)
         .order_by(WorkerModel.model_name.asc())
     ).all()
@@ -54,8 +54,10 @@ def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = 
     ).all()
     speed_map = {str(name): float(speed) for name, speed in speed_rows if name}
     models = []
-    for name, cost in model_rows:
+    for name, cost, avg_power in model_rows:
         item = {"name": name, "cost_per_token": float(cost)}
+        if avg_power is not None:
+            item["avg_power_watts"] = float(avg_power)
         speed = speed_map.get(str(name))
         if speed is not None:
             item["speed_tps"] = speed
@@ -97,6 +99,7 @@ def get_job(job_id: str, _: str = Depends(require_api_key), db: Session = Depend
                 "prompt_tokens": int(raw.get("prompt_tokens") or 0),
                 "completion_tokens": int(raw.get("completion_tokens") or 0),
                 "total_tokens": int(raw.get("total_tokens") or 0),
+                "avg_power_watts": float(raw.get("avg_power_watts") or 0.0) if raw.get("avg_power_watts") is not None else None,
             }
         except Exception:
             result = None

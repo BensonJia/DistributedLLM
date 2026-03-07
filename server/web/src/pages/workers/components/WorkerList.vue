@@ -73,7 +73,13 @@ function copy(text: string){
     </div>
 
     <div v-else class="list">
-      <button v-for="w in sortedFiltered" :key="w.worker_id" class="row" :class="{active: w.worker_id===store.selectedId}" @click="select(w)">
+      <button
+        v-for="w in sortedFiltered"
+        :key="w.worker_id"
+        class="row"
+        :class="{active: w.worker_id===store.selectedId, 'updated-flash': !!store.updatedWorkerIds[w.worker_id]}"
+        @click="select(w)"
+      >
         <div class="top">
           <div class="mono id" :title="w.worker_id">{{ shortId(w.worker_id) }}</div>
           <span :class="chipClass(w)">{{ chipText(w) }}</span>

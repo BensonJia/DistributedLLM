@@ -9,3 +9,8 @@ export function fmtCost(v: number): string{
   if (v !== 0 && Math.abs(v) < 0.0001) return v.toExponential(2);
   return String(v.toFixed(6));
 }
+
+export function fmtWatts(v?: number | null): string{
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${Number(v).toFixed(2)} W`;
+}

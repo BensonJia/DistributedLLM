@@ -8,6 +8,7 @@ class WorkerRegisterResponse(BaseModel):
 class WorkerModelInfo(BaseModel):
     name: str
     cost_per_token: float
+    avg_power_watts: float | None = None
 
 class WorkerHeartbeat(BaseModel):
     worker_id: str
@@ -37,6 +38,7 @@ class WorkerJobCompleteRequest(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    avg_power_watts: float | None = None
     error: Optional[str] = None
 
 class OpenAIChatMessage(BaseModel):
