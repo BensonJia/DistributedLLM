@@ -34,13 +34,14 @@ class WorkerSettings(BaseSettings):
     internal_token: str = Field(default="")
     debug: bool = Field(default=False)
     startup_env_keys: str = Field(
-        default="DLLM_WORKER_SERVER_URL,DLLM_WORKER_OLLAMA_URL,DLLM_WORKER_LISTEN_PORT,DLLM_WORKER_DEBUG"
+        default="DLLM_WORKER_SERVER_URL,DLLM_WORKER_OLLAMA_URL,DLLM_WORKER_LISTEN_PORT,DLLM_WORKER_DEBUG,DLLM_WORKER_STREAM_INTERVAL_SEC"
     )
     listen_port: int = Field(default=9001)
     ollama_url: str = Field(default="http://127.0.0.1:11434")
     worker_data_dir: str = Field(default="./.worker_data")
     heartbeat_interval_sec: int = Field(default=20)
     job_pull_interval_sec: float = Field(default=2)
+    stream_interval_sec: float = Field(default=0.5)
     electricity_url: str = Field(default="")
     electricity_fallback_price_per_kwh: float = Field(default=0.20)
     base_cost_per_token: float = Field(default=1e-7)

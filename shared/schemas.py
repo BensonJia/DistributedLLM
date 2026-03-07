@@ -41,6 +41,12 @@ class WorkerJobCompleteRequest(BaseModel):
     avg_power_watts: float | None = None
     error: Optional[str] = None
 
+
+class WorkerJobChunkRequest(BaseModel):
+    worker_id: str
+    job_id: str
+    delta: str = ""
+
 class OpenAIChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
     content: str

@@ -156,6 +156,7 @@ uvicorn server.main:app --host 0.0.0.0 --port 8000
 export DLLM_WORKER_SERVER_URL=http://<server-ip>:8000
 export DLLM_WORKER_OLLAMA_URL=http://127.0.0.1:11434
 export DLLM_WORKER_INTERNAL_TOKEN=<same-as-server-internal-token>
+(optional) export DLLM_WORKER_STREAM_INTERVAL_SEC=2
 ```
 
 3. 启动 Worker：
@@ -184,13 +185,13 @@ docker logs -f dllm-web
 
 验证 OpenAI 兼容接口：
 ```bash
-curl http://127.0.0.1:8000/v1/chat/completions \
+curl -N http://127.0.0.1:8000/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen3:8b",
-    "messages": [{"role":"user","content":"用中文回答：1+1等于几？"}],
-    "temperature": 0.2
+    "model":"qwen3:8b",
+    "messages":[{"role":"user","content":"1+1等于几，分析下为什么"}],
+    "stream": true
   }'
 ```
 

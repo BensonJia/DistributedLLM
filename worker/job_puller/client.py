@@ -1,7 +1,7 @@
 from __future__ import annotations
 import httpx
 import logging
-from shared.schemas import WorkerJobPullRequest, WorkerJobPullResponse, WorkerJobCompleteRequest
+from shared.schemas import WorkerJobPullRequest, WorkerJobPullResponse, WorkerJobCompleteRequest, WorkerJobChunkRequest
 
 logger = logging.getLogger(__name__)
 
@@ -42,5 +42,16 @@ class JobPullClient:
             r = await client.post(url, json=payload.model_dump(), headers=self._headers())
             if self.debug:
                 logger.debug("Comm[complete] response: status=%s job_id=%s", r.status_code, payload.job_id)
+            r.raise_for_status()
+            return r.json()
+
+    async def chunk(self, payload: WorkerJobChunkRequest):
+        url = self.server_url + "/internal/job/chunk"
+        if self.debug:
+            logger.debug("Comm[chunk] request: job_id=%s url=%s", payload.job_id, url)
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(url, json=payload.model_dump(), headers=self._headers())
+            if self.debug:
+                logger.debug("Comm[chunk] response: status=%s job_id=%s", r.status_code, payload.job_id)
             r.raise_for_status()
             return r.json()

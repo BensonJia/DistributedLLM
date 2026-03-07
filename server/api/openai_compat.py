@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio, json, time
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from shared.schemas import (
     OpenAIChatCompletionRequest,
@@ -18,9 +19,61 @@ from server.worker_registry.service import WorkerService
 from server.job_queue.service import JobService
 from server.request_queue.service import AwaitingRequestService
 from server.cluster.service import ClusterService
+from server.streaming.job_stream import job_stream_hub
 from shared.config import ServerSettings
 
 router = APIRouter()
+
+
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _chunk_with_role(job_id: str, model: str, created: int) -> str:
+    return _sse_event(
+        {
+            "id": job_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+        }
+    )
+
+
+def _chunk_with_content(job_id: str, model: str, created: int, content: str) -> str:
+    return _sse_event(
+        {
+            "id": job_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+        }
+    )
+
+
+def _chunk_finish(job_id: str, model: str, created: int, finish_reason: str = "stop") -> str:
+    return _sse_event(
+        {
+            "id": job_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+        }
+    )
+
+
+def _chunk_error(message: str) -> str:
+    return _sse_event(
+        {
+            "error": {
+                "message": message,
+                "type": "server_error",
+            }
+        }
+    )
 
 @router.get("/v1/models", response_model=OpenAIModelList)
 def list_models(_: str = Depends(require_api_key), db: Session = Depends(get_db)):
@@ -38,9 +91,6 @@ async def chat_completions(
     x_dllm_forward_hop: int = Header(default=0, alias="X-DLLM-Forward-Hop"),
     x_dllm_seen_nodes: str = Header(default="", alias="X-DLLM-Seen-Nodes"),
 ):
-    if req.stream:
-        raise HTTPException(status_code=400, detail="stream is not supported")
-
     settings = ServerSettings()
     worker_svc = WorkerService(db)
     job_svc = JobService(db)
@@ -48,6 +98,7 @@ async def chat_completions(
     cluster_svc = ClusterService(db)
     req_id = new_req_id()
     job_id = None
+    stream_local_cleanup_managed = False
 
     # Enqueue the request
     req_svc.create(
@@ -105,11 +156,41 @@ async def chat_completions(
                         if not base_url:
                             continue
                         try:
-                            resp = await client.post(
-                                f"{base_url}/v1/chat/completions",
-                                json=req.model_dump(),
-                                headers=headers,
-                            )
+                            if req.stream:
+                                timeout = httpx.Timeout(connect=forward_timeout, read=None, write=forward_timeout, pool=forward_timeout)
+                                stream_client = httpx.AsyncClient(timeout=timeout)
+                                try:
+                                    request = stream_client.build_request(
+                                        "POST",
+                                        f"{base_url}/v1/chat/completions",
+                                        json=req.model_dump(),
+                                        headers=headers,
+                                    )
+                                    resp = await stream_client.send(request, stream=True)
+                                except Exception:
+                                    await stream_client.aclose()
+                                    continue
+
+                                if resp.status_code == 200:
+                                    async def forward_iter():
+                                        try:
+                                            async for chunk in resp.aiter_bytes():
+                                                if chunk:
+                                                    yield chunk
+                                        finally:
+                                            await resp.aclose()
+                                            await stream_client.aclose()
+
+                                    return StreamingResponse(
+                                        forward_iter(),
+                                        media_type="text/event-stream",
+                                        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                                    )
+                                await resp.aread()
+                                await resp.aclose()
+                                await stream_client.aclose()
+                                continue
+                            resp = await client.post(f"{base_url}/v1/chat/completions", json=req.model_dump(), headers=headers)
                         except Exception:
                             continue
                         if resp.status_code == 200:
@@ -129,7 +210,77 @@ async def chat_completions(
             "max_tokens": req.max_tokens,
             "stream": req.stream,
         }
+        if req.stream:
+            await job_stream_hub.ensure(job_id)
         job_svc.create(job_id=job_id, model=req.model, assigned_worker_id=assigned_worker_id, payload=payload)
+
+        if req.stream:
+            stream_local_cleanup_managed = True
+
+            async def stream_iter():
+                created = now_ts()
+                q = await job_stream_hub.subscribe(job_id)
+                try:
+                    yield _chunk_with_role(job_id=job_id, model=req.model, created=created)
+                    job_deadline = time.time() + float(settings.job_max_wait_sec)
+                    while time.time() < job_deadline:
+                        try:
+                            evt = await asyncio.wait_for(q.get(), timeout=poll)
+                        except asyncio.TimeoutError:
+                            continue
+                        et = str(evt.get("type") or "")
+                        if et == "delta":
+                            content = str(evt.get("delta") or "")
+                            if content:
+                                yield _chunk_with_content(job_id=job_id, model=req.model, created=created, content=content)
+                            continue
+                        if et == "done":
+                            yield _chunk_finish(job_id=job_id, model=req.model, created=created, finish_reason="stop")
+                            yield "data: [DONE]\n\n"
+                            return
+                        if et == "error":
+                            err_msg = str(evt.get("message") or "Worker job failed: unknown error")
+                            yield _chunk_error(err_msg)
+                            yield "data: [DONE]\n\n"
+                            return
+
+                    # Timeout path
+                    db2 = SessionLocal()
+                    try:
+                        job = JobService(db2).get(job_id)
+                        if job and job.status == "done":
+                            data = json.loads(job.result_json or "{}")
+                            output_text = str(data.get("output_text") or "")
+                            if output_text:
+                                yield _chunk_with_content(job_id=job_id, model=req.model, created=created, content=output_text)
+                            yield _chunk_finish(job_id=job_id, model=req.model, created=created, finish_reason="stop")
+                            yield "data: [DONE]\n\n"
+                            return
+                        if job and job.status == "failed":
+                            err_msg = f"Worker job failed: {job.error or 'unknown error'}"
+                            yield _chunk_error(err_msg)
+                            yield "data: [DONE]\n\n"
+                            return
+                    finally:
+                        db2.close()
+
+                    yield _chunk_error("Job timed out waiting for worker")
+                    yield "data: [DONE]\n\n"
+                finally:
+                    await job_stream_hub.close(job_id)
+                    db3 = SessionLocal()
+                    try:
+                        AwaitingRequestService(db3).delete(req_id)
+                        if assigned_worker_id and job_id:
+                            WorkerService(db3).clear_job_if_matches(assigned_worker_id, job_id)
+                    finally:
+                        db3.close()
+
+            return StreamingResponse(
+                stream_iter(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            )
 
         # Poll for job completion
         job_deadline = time.time() + float(settings.job_max_wait_sec)
@@ -164,6 +315,7 @@ async def chat_completions(
 
     finally:
         # Clean up the awaiting request and the worker's job assignment
-        req_svc.delete(req_id)
-        if assigned_worker_id and job_id:
-            worker_svc.clear_job_if_matches(assigned_worker_id, job_id)
+        if not stream_local_cleanup_managed:
+            req_svc.delete(req_id)
+            if assigned_worker_id and job_id:
+                worker_svc.clear_job_if_matches(assigned_worker_id, job_id)

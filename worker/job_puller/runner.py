@@ -3,7 +3,7 @@ import asyncio
 import logging
 import time
 from shared.config import WorkerSettings
-from shared.schemas import WorkerJobCompleteRequest
+from shared.schemas import WorkerJobCompleteRequest, WorkerJobChunkRequest
 from worker.cost_engine.calculator import CostCalculator
 from worker.cost_engine.power_api import TaskPowerAttributor, TaskPowerReport
 from worker.job_puller.client import JobPullClient
@@ -68,13 +68,100 @@ class JobRunner:
                 started = time.perf_counter()
                 if self.settings.debug:
                     logger.debug("Comm[infer] start: job_id=%s", job.job_id)
-                text, pt, ct, tt = await self.infer.chat(
-                    model=job.model,
-                    messages=job.messages,
-                    temperature=job.temperature,
-                    top_p=job.top_p,
-                    max_tokens=job.max_tokens,
-                )
+                if job.stream:
+                    stream_interval = max(0.05, float(self.settings.stream_interval_sec))
+                    retry_interval = 1.0
+                    max_failures = 5
+                    delta_queue: asyncio.Queue[str] = asyncio.Queue()
+                    stream_done = asyncio.Event()
+                    stream_abort = asyncio.Event()
+                    abort_reason = "stream chunk upload failed"
+                    infer_task: asyncio.Task | None = None
+
+                    async def on_delta(delta: str):
+                        if stream_abort.is_set():
+                            raise RuntimeError(abort_reason)
+                        await delta_queue.put(delta)
+
+                    async def flush_stream_chunks():
+                        nonlocal abort_reason
+                        pending = ""
+                        consecutive_failures = 0
+                        next_wait = stream_interval
+                        while True:
+                            if stream_abort.is_set():
+                                return
+                            try:
+                                piece = await asyncio.wait_for(delta_queue.get(), timeout=next_wait)
+                                pending += piece
+                                while True:
+                                    pending += delta_queue.get_nowait()
+                            except asyncio.TimeoutError:
+                                pass
+                            except asyncio.QueueEmpty:
+                                pass
+
+                            if pending:
+                                try:
+                                    await self.client.chunk(
+                                        WorkerJobChunkRequest(worker_id=worker_id, job_id=job.job_id, delta=pending)
+                                    )
+                                    pending = ""
+                                    consecutive_failures = 0
+                                    next_wait = stream_interval
+                                except Exception as exc:
+                                    consecutive_failures += 1
+                                    next_wait = retry_interval
+                                    if self.settings.debug:
+                                        logger.debug(
+                                            "Comm[chunk] failed: job_id=%s failures=%s error=%s",
+                                            job.job_id,
+                                            consecutive_failures,
+                                            exc,
+                                        )
+                                    if consecutive_failures >= max_failures:
+                                        abort_reason = (
+                                            "stream chunk upload failed 5 times; inference aborted"
+                                        )
+                                        stream_abort.set()
+                                        if infer_task and not infer_task.done():
+                                            infer_task.cancel()
+                                        return
+
+                            if stream_done.is_set() and delta_queue.empty() and not pending:
+                                return
+
+                    flush_task = asyncio.create_task(flush_stream_chunks(), name=f"stream-flush-{job.job_id}")
+                    infer_task = asyncio.create_task(
+                        self.infer.chat_stream(
+                            model=job.model,
+                            messages=job.messages,
+                            temperature=job.temperature,
+                            top_p=job.top_p,
+                            max_tokens=job.max_tokens,
+                            on_delta=on_delta,
+                        ),
+                        name=f"stream-infer-{job.job_id}",
+                    )
+                    try:
+                        text, pt, ct, tt = await infer_task
+                    except asyncio.CancelledError:
+                        if stream_abort.is_set():
+                            raise RuntimeError(abort_reason)
+                        raise
+                    finally:
+                        stream_done.set()
+                        await flush_task
+                    if stream_abort.is_set():
+                        raise RuntimeError(abort_reason)
+                else:
+                    text, pt, ct, tt = await self.infer.chat(
+                        model=job.model,
+                        messages=job.messages,
+                        temperature=job.temperature,
+                        top_p=job.top_p,
+                        max_tokens=job.max_tokens,
+                    )
                 elapsed = time.perf_counter() - started
                 if self.settings.debug:
                     logger.debug("Comm[infer] done: job_id=%s total_tokens=%s elapsed=%.3fs", job.job_id, tt, elapsed)

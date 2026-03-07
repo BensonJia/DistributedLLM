@@ -8,12 +8,14 @@ from shared.schemas import (
     WorkerJobPullRequest,
     WorkerJobPullResponse,
     WorkerJobCompleteRequest,
+    WorkerJobChunkRequest,
 )
 from shared.utils import new_worker_id
 from server.deps import get_db
 from server.worker_registry.service import WorkerService
 from server.job_queue.service import JobService
 from server.api.auth_middleware import require_internal_token
+from server.streaming.job_stream import job_stream_hub
 
 router = APIRouter()
 
@@ -35,7 +37,25 @@ def pull_job(payload: WorkerJobPullRequest, _: str = Depends(require_internal_to
     return WorkerJobPullResponse.model_validate(data)
 
 @router.post("/internal/job/complete")
-def complete_job(payload: WorkerJobCompleteRequest, _: str = Depends(require_internal_token), db: Session = Depends(get_db)):
+async def complete_job(payload: WorkerJobCompleteRequest, _: str = Depends(require_internal_token), db: Session = Depends(get_db)):
     JobService(db).complete(payload.job_id, result=payload.model_dump(), error=payload.error)
+    if payload.error:
+        await job_stream_hub.publish_error(payload.job_id, payload.error)
+    else:
+        await job_stream_hub.publish_done(
+            payload.job_id,
+            usage={
+                "prompt_tokens": int(payload.prompt_tokens or 0),
+                "completion_tokens": int(payload.completion_tokens or 0),
+                "total_tokens": int(payload.total_tokens or 0),
+            },
+        )
     WorkerService(db).clear_job_if_matches(payload.worker_id, payload.job_id)
+    return {"ok": True}
+
+
+@router.post("/internal/job/chunk")
+async def job_chunk(payload: WorkerJobChunkRequest, _: str = Depends(require_internal_token)):
+    if payload.delta:
+        await job_stream_hub.publish_delta(payload.job_id, payload.delta)
     return {"ok": True}
