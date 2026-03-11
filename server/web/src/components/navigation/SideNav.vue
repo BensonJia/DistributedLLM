@@ -20,7 +20,7 @@ function go(path: string){
       <div class="logo">◈</div>
       <div>
         <div class="name">Control Plane</div>
-        <div class="sub">Workers · Jobs</div>
+        <div class="sub">Workers · Jobs · Stats</div>
       </div>
     </div>
 
@@ -36,6 +36,10 @@ function go(path: string){
       <button class="item" :class="{ active: route.path.startsWith('/cluster') }" @click="go('/cluster')">
         <span class="ic">🌐</span>
         集群节点
+      </button>
+      <button class="item" :class="{ active: route.path.startsWith('/stats') }" @click="go('/stats')">
+        <span class="ic">📊</span>
+        数据统计
       </button>
     </nav>
 

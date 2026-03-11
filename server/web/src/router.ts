@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import WorkersPage from "@/pages/workers/WorkersPage.vue";
 import JobsPage from "@/pages/jobs/JobsPage.vue";
 import ClusterPage from "@/pages/cluster/ClusterPage.vue";
+import StatsPage from "@/pages/stats/StatsPage.vue";
 
 export default createRouter({
   history: createWebHistory(),
@@ -9,6 +10,7 @@ export default createRouter({
     { path: "/", redirect: "/workers" },
     { path: "/workers", component: WorkersPage },
     { path: "/jobs", component: JobsPage },
-    { path: "/cluster", component: ClusterPage }
+    { path: "/cluster", component: ClusterPage },
+    { path: "/stats", component: StatsPage }
   ]
 });

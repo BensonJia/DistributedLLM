@@ -25,7 +25,7 @@ from worker.job_puller.client import JobPullClient
 from worker.job_puller.runner import JobRunner
 from worker.worker_api.health import router as health_router
 
-app = FastAPI(title="Distributed LLM Worker (Pull)", version="0.2.0")
+app = FastAPI(title="Distributed LLM Worker", version="0.2.0")
 logger = logging.getLogger(__name__)
 
 settings = WorkerSettings()
