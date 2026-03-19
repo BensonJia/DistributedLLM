@@ -40,6 +40,14 @@
 - `job_max_wait_sec`（默认：`600`）
   - 请求端等待 job 完成的最大时长（秒）。
 
+- `dispatch_interval_sec`（默认：`2.0`）
+  - 请求池批量分配任务的调度间隔（秒）。
+  - 在该间隔内到达的请求会先进入候选请求池，等待下一轮批量分配。
+
+- `scheduler_speed_tolerance_ratio`（默认：`0.1`）
+  - worker 选择时的速度容忍比例（0 表示严格按速度优先）。
+  - 例如 `0.1` 表示在最高推理速度 90% 以上的 worker 视为同一速度档，再按成本择优。
+
 ## 4. CORS 配置
 
 - `cors_allow_origins`（默认：空字符串）

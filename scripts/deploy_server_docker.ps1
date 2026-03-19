@@ -31,6 +31,13 @@ function Parse-EnvFile([string]$path) {
     return $map
 }
 
+function Normalize-Csv([string]$value) {
+    if (-not $value) { return $value }
+    $normalized = $value.Replace("，", ",")
+    $parts = $normalized.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    return ($parts -join ",")
+}
+
 $existing = Parse-EnvFile $envPath
 
 $dockerImageName = if ($env:DOCKER_IMAGE_NAME) { $env:DOCKER_IMAGE_NAME } elseif ($existing["DOCKER_IMAGE_NAME"]) { $existing["DOCKER_IMAGE_NAME"] } else { "dllm-server:latest" }
@@ -40,6 +47,7 @@ $serverPort = if ($env:DLLM_SERVER_PORT) { $env:DLLM_SERVER_PORT } elseif ($exis
 $webPort = if ($env:DLLM_WEB_PORT) { $env:DLLM_WEB_PORT } elseif ($existing["DLLM_WEB_PORT"]) { $existing["DLLM_WEB_PORT"] } else { "5173" }
 $dbUrl = if ($env:DLLM_SERVER_DB_URL) { $env:DLLM_SERVER_DB_URL } elseif ($existing["DLLM_SERVER_DB_URL"]) { $existing["DLLM_SERVER_DB_URL"] } else { "sqlite:///./data/server.db" }
 $apiKey = if ($env:DLLM_SERVER_API_KEYS_BOOTSTRAP) { $env:DLLM_SERVER_API_KEYS_BOOTSTRAP } elseif ($existing["DLLM_SERVER_API_KEYS_BOOTSTRAP"]) { $existing["DLLM_SERVER_API_KEYS_BOOTSTRAP"] } else { "dev-key-123" }
+$apiKey = Normalize-Csv $apiKey
 $clusterEnabled = if ($env:DLLM_SERVER_CLUSTER_ENABLED) { $env:DLLM_SERVER_CLUSTER_ENABLED } elseif ($existing["DLLM_SERVER_CLUSTER_ENABLED"]) { $existing["DLLM_SERVER_CLUSTER_ENABLED"] } else { "true" }
 $viteApiKey = if ($env:VITE_API_KEY) { $env:VITE_API_KEY } elseif ($existing["VITE_API_KEY"]) { $existing["VITE_API_KEY"] } else { "dev-key-123" }
 $viteUseMock = if ($env:VITE_USE_MOCK) { $env:VITE_USE_MOCK } elseif ($existing["VITE_USE_MOCK"]) { $existing["VITE_USE_MOCK"] } else { "false" }
@@ -50,6 +58,8 @@ $viteApiBase = if ($env:VITE_API_BASE) { $env:VITE_API_BASE } elseif ($existing[
 $viteProxyTarget = if ($env:VITE_PROXY_TARGET) { $env:VITE_PROXY_TARGET } elseif ($existing["VITE_PROXY_TARGET"]) { $existing["VITE_PROXY_TARGET"] } else { "http://dllm-server:8000" }
 $corsAllowOrigins = if ($env:DLLM_SERVER_CORS_ALLOW_ORIGINS) { $env:DLLM_SERVER_CORS_ALLOW_ORIGINS } elseif ($existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"]) { $existing["DLLM_SERVER_CORS_ALLOW_ORIGINS"] } else { "http://$nodeInternalIp`:$webPort,http://127.0.0.1:$webPort,http://localhost:$webPort" }
 $corsAllowCredentials = if ($env:DLLM_SERVER_CORS_ALLOW_CREDENTIALS) { $env:DLLM_SERVER_CORS_ALLOW_CREDENTIALS } elseif ($existing["DLLM_SERVER_CORS_ALLOW_CREDENTIALS"]) { $existing["DLLM_SERVER_CORS_ALLOW_CREDENTIALS"] } else { "false" }
+$dispatchIntervalSec = if ($env:DLLM_SERVER_DISPATCH_INTERVAL_SEC) { $env:DLLM_SERVER_DISPATCH_INTERVAL_SEC } elseif ($existing["DLLM_SERVER_DISPATCH_INTERVAL_SEC"]) { $existing["DLLM_SERVER_DISPATCH_INTERVAL_SEC"] } else { "2.0" }
+$schedulerSpeedToleranceRatio = if ($env:DLLM_SERVER_SCHEDULER_SPEED_TOLERANCE_RATIO) { $env:DLLM_SERVER_SCHEDULER_SPEED_TOLERANCE_RATIO } elseif ($existing["DLLM_SERVER_SCHEDULER_SPEED_TOLERANCE_RATIO"]) { $existing["DLLM_SERVER_SCHEDULER_SPEED_TOLERANCE_RATIO"] } else { "0.1" }
 
 $internalToken = if ($existing["DLLM_SERVER_INTERNAL_TOKEN"]) { $existing["DLLM_SERVER_INTERNAL_TOKEN"] } elseif ($env:DLLM_SERVER_INTERNAL_TOKEN) { $env:DLLM_SERVER_INTERNAL_TOKEN } else { Get-RandomHex 48 }
 $nodeId = "node-$(Get-Date -Format 'yyyyMMddHHmmss')-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
@@ -74,6 +84,8 @@ $envLines = @(
     "DLLM_SERVER_CLUSTER_SEED_URLS=$clusterSeedUrls"
     "DLLM_SERVER_CORS_ALLOW_ORIGINS=$corsAllowOrigins"
     "DLLM_SERVER_CORS_ALLOW_CREDENTIALS=$corsAllowCredentials"
+    "DLLM_SERVER_DISPATCH_INTERVAL_SEC=$dispatchIntervalSec"
+    "DLLM_SERVER_SCHEDULER_SPEED_TOLERANCE_RATIO=$schedulerSpeedToleranceRatio"
     "DLLM_SERVER_PORT=$serverPort"
     "NODE_IP=$nodeIp"
     "NODE_INTERNAL_IP=$nodeInternalIp"

@@ -40,6 +40,9 @@ class WorkerService:
     def set_job(self, worker_id: str, job_id: str | None):
         return self.repo.set_job(worker_id, job_id)
 
+    def reserve_job_if_idle(self, worker_id: str, job_id: str):
+        return self.repo.reserve_job_if_idle(worker_id, job_id)
+
     def clear_job_if_matches(self, worker_id: str, expected_job_id: str):
         return self.repo.clear_job_if_matches(worker_id, expected_job_id)
 

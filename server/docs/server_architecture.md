@@ -110,8 +110,8 @@
 - 后台任务（`server/background`）
   - `heartbeat_timeout_checker.py`
     - 定时将超时未心跳 worker 标记为 offline
-  - `request_assigner.py`
-    - 定时扫描待分配请求并挑选 worker
+- `request_assigner.py`
+    - 定时扫描候选请求池并批量分配 worker
   - `cluster_sync.py`
     - cluster 启用后定时探活邻居、发送 gossip、应用回传 deltas
 
@@ -186,7 +186,7 @@
 
 - `SchedulerService.pick_worker(model_name)`
   - 输入候选：在线、空闲、支持模型
-  - 选择策略：最低 token 成本优先
+  - 选择策略：速度容忍分档后按成本择优
 
 - `AwaitingRequestRepository.assign_worker_to_request`
   - 使用 `with_for_update()` 锁请求行，避免并发重复分配
@@ -234,7 +234,7 @@
 
 1. 客户端 -> `/v1/chat/completions`
 2. Server 将请求写入 `awaiting_reqs`
-3. `request_assigner` 给请求绑定 worker
+3. `request_assigner` 按模型 -> 到达时间顺序批量给请求绑定 worker
 4. Server 创建 `jobs`
 5. Worker `/internal/job/pull` 拉到任务并执行
 6. Worker `/internal/job/complete` 回写结果

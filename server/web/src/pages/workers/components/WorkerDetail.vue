@@ -8,6 +8,7 @@ import { useUiStore } from "@/stores/ui";
 const store = useWorkersStore();
 const ui = useUiStore();
 const w = computed(() => store.selected);
+const isReserved = computed(() => (w.value?.current_job_id || "").startsWith("req_"));
 
 function chipClass(){
   if (!w.value) return "chip dot";
@@ -16,9 +17,9 @@ function chipClass(){
   return "chip dot ok";
 }
 function chipText(){
-  if (!w.value) return "—";
+  if (!w.value) return "Unknown";
   if (w.value.status === "offline") return "Offline";
-  if (w.value.work_state === "busy") return "Online · Busy";
+  if (w.value.work_state === "busy") return isReserved.value ? "Online · Reserved" : "Online · Busy";
   return "Online · Idle";
 }
 function copy(text: string){
@@ -52,7 +53,9 @@ function copy(text: string){
           <div class="k">在线状态</div>
           <div class="v">{{ w.status }}</div>
           <div class="k">当前任务</div>
-          <div class="v mono">{{ w.work_state==='busy' ? (w.current_job_id || '—') : '—' }}</div>
+          <div class="v mono">{{ w.work_state === "busy" ? (w.current_job_id || "—") : "—" }}</div>
+          <div v-if="isReserved && w.current_job_id" class="k">预占用请求</div>
+          <div v-if="isReserved && w.current_job_id" class="v mono">{{ w.current_job_id }}</div>
         </div>
 
         <div class="card pad soft" :class="{ 'updated-flash': store.selectedModelsUpdated }">

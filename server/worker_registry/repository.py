@@ -1,6 +1,6 @@
 from __future__ import annotations
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from .models import Worker, WorkerModel, WorkerModelStat
 import datetime
 
@@ -22,11 +22,11 @@ class WorkerRepository:
 
     def set_offline_if_stale(self, cutoff_dt: datetime.datetime):
         q = self.db.execute(select(Worker).where(Worker.last_heartbeat < cutoff_dt, Worker.status == "online"))
-        changed = 0
+        changed: list[str] = []
         for w in q.scalars().all():
             w.status = "offline"
             w.current_job_id = None
-            changed += 1
+            changed.append(str(w.worker_id))
         if changed:
             self.db.commit()
         return changed
@@ -38,6 +38,23 @@ class WorkerRepository:
         obj.current_job_id = job_id
         self.db.commit()
         return obj
+
+    def reserve_job_if_idle(self, worker_id: str, job_id: str):
+        stmt = (
+            update(Worker)
+            .where(
+                Worker.worker_id == worker_id,
+                Worker.status == "online",
+                Worker.current_job_id.is_(None),
+            )
+            .values(current_job_id=job_id)
+        )
+        result = self.db.execute(stmt)
+        if int(result.rowcount or 0) < 1:
+            self.db.rollback()
+            return None
+        self.db.commit()
+        return self.db.get(Worker, worker_id)
 
     def clear_job_if_matches(self, worker_id: str, expected_job_id: str):
         obj = self.db.get(Worker, worker_id)
@@ -92,6 +109,25 @@ class WorkerRepository:
         stmt = (
             select(Worker, WorkerModel.cost_per_token)
             .join(WorkerModel, Worker.worker_id == WorkerModel.worker_id)
+            .where(
+                Worker.status == "online",
+                Worker.current_job_id.is_(None),
+                WorkerModel.model_name == model_name,
+            )
+        )
+        return self.db.execute(stmt).all()
+
+    def get_candidate_workers_with_speed(self, model_name: str):
+        stmt = (
+            select(Worker, WorkerModel.cost_per_token, WorkerModelStat.speed_tps)
+            .join(WorkerModel, Worker.worker_id == WorkerModel.worker_id)
+            .outerjoin(
+                WorkerModelStat,
+                and_(
+                    WorkerModelStat.worker_id == Worker.worker_id,
+                    WorkerModelStat.model_name == WorkerModel.model_name,
+                ),
+            )
             .where(
                 Worker.status == "online",
                 Worker.current_job_id.is_(None),

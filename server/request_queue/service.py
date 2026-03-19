@@ -21,3 +21,6 @@ class AwaitingRequestService:
 
     def delete(self, req_id: str):
         self.repo.delete_request(req_id)
+
+    def release_assigned_requests(self, worker_ids: list[str]) -> int:
+        return self.repo.release_assigned_requests(worker_ids)

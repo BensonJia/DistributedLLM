@@ -11,6 +11,8 @@ class ServerSettings(BaseSettings):
     request_timeout_sec: int = Field(default=600)
     job_poll_interval_ms: int = Field(default=300)
     job_max_wait_sec: int = Field(default=600)
+    dispatch_interval_sec: float = Field(default=2.0)
+    scheduler_speed_tolerance_ratio: float = Field(default=0.1)
     cors_allow_origins: str = Field(default="")  # comma-separated
     cors_allow_credentials: bool = Field(default=False)
     cluster_enabled: bool = Field(default=False)

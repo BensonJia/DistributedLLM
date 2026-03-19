@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, update
 from .models import AwaitingRequest
 
 class AwaitingRequestRepository:
@@ -24,7 +24,12 @@ class AwaitingRequestRepository:
         return self.db.execute(select(AwaitingRequest).where(AwaitingRequest.req_id == req_id)).scalar_one_or_none()
 
     def get_pending_requests(self) -> list[AwaitingRequest]:
-        stmt = select(AwaitingRequest).where(AwaitingRequest.status == "pending").order_by(AwaitingRequest.created_at.asc())
+        # Batch scheduler priority: model first, then arrival time (FIFO within each model).
+        stmt = (
+            select(AwaitingRequest)
+            .where(AwaitingRequest.status == "pending")
+            .order_by(AwaitingRequest.model_name.asc(), AwaitingRequest.created_at.asc())
+        )
         return self.db.execute(stmt).scalars().all()
 
     def assign_worker_to_request(self, req_id: str, worker_id: str) -> AwaitingRequest | None:
@@ -41,6 +46,25 @@ class AwaitingRequestRepository:
         self.db.commit()
         self.db.refresh(req)
         return req
+
+    def release_assigned_requests(self, worker_ids: list[str]) -> int:
+        ids = [str(worker_id) for worker_id in worker_ids if worker_id]
+        if not ids:
+            return 0
+        stmt = (
+            update(AwaitingRequest)
+            .where(
+                AwaitingRequest.status == "assigned",
+                AwaitingRequest.assigned_worker_id.in_(ids),
+            )
+            .values(
+                status="pending",
+                assigned_worker_id=None,
+            )
+        )
+        result = self.db.execute(stmt)
+        self.db.commit()
+        return int(result.rowcount or 0)
 
     def delete_request(self, req_id: str):
         obj = self.db.execute(select(AwaitingRequest).where(AwaitingRequest.req_id == req_id)).scalar_one_or_none()

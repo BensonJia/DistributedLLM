@@ -270,9 +270,13 @@ async def chat_completions(
                     await job_stream_hub.close(job_id)
                     db3 = SessionLocal()
                     try:
+                        awaited_req = AwaitingRequestService(db3).get(req_id)
+                        effective_worker_id = assigned_worker_id or (awaited_req.assigned_worker_id if awaited_req and awaited_req.assigned_worker_id else None)
+                        if effective_worker_id and job_id:
+                            WorkerService(db3).clear_job_if_matches(effective_worker_id, job_id)
+                        elif effective_worker_id and awaited_req:
+                            WorkerService(db3).clear_job_if_matches(effective_worker_id, req_id)
                         AwaitingRequestService(db3).delete(req_id)
-                        if assigned_worker_id and job_id:
-                            WorkerService(db3).clear_job_if_matches(assigned_worker_id, job_id)
                     finally:
                         db3.close()
 
@@ -316,6 +320,14 @@ async def chat_completions(
     finally:
         # Clean up the awaiting request and the worker's job assignment
         if not stream_local_cleanup_managed:
-            req_svc.delete(req_id)
-            if assigned_worker_id and job_id:
-                worker_svc.clear_job_if_matches(assigned_worker_id, job_id)
+            db3 = SessionLocal()
+            try:
+                awaited_req = AwaitingRequestService(db3).get(req_id)
+                effective_worker_id = assigned_worker_id or (awaited_req.assigned_worker_id if awaited_req and awaited_req.assigned_worker_id else None)
+                if effective_worker_id and job_id:
+                    WorkerService(db3).clear_job_if_matches(effective_worker_id, job_id)
+                elif effective_worker_id and awaited_req:
+                    WorkerService(db3).clear_job_if_matches(effective_worker_id, req_id)
+                AwaitingRequestService(db3).delete(req_id)
+            finally:
+                db3.close()
