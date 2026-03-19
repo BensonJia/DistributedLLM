@@ -14,6 +14,7 @@ function chipClass(){
   if (!j.value) return "chip dot";
   if (j.value.status === "failed") return "chip dot err";
   if (j.value.status === "running") return "chip dot warn";
+  if (j.value.status === "awaiting") return "chip dot";
   if (j.value.status === "pending") return "chip dot";
   return "chip dot ok";
 }
@@ -37,7 +38,7 @@ function copy(text: string){
         <div class="sub">
           <span :class="chipClass()">{{ j.status }}</span>
           <span class="muted">model: <span class="mono">{{ j.model }}</span></span>
-          <span class="muted">worker: <span class="mono">{{ j.assigned_worker_id }}</span></span>
+          <span class="muted">worker: <span class="mono">{{ j.assigned_worker_id || "—" }}</span></span>
         </div>
         <div class="sub muted">
           created: {{ formatIso(j.created_at) }} · updated: {{ formatIso(j.updated_at) }}
@@ -47,6 +48,11 @@ function copy(text: string){
       <div v-if="j.status==='running'" class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">
         <div class="k">执行中</div>
         <div class="p">Worker 正在处理该任务。</div>
+      </div>
+
+      <div v-else-if="j.status==='awaiting'" class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">
+        <div class="k">Awaiting</div>
+        <div class="p">Request is in awaiting queue and waiting for scheduler assignment.</div>
       </div>
 
       <div v-else-if="j.status==='pending'" class="card pad soft" :class="{ 'updated-flash': store.selectedMetaUpdated }">

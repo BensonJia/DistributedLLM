@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import { useUiStore } from "@/stores/ui";
+import { useAuthStore } from "@/stores/auth";
 
 const ui = useUiStore();
+const auth = useAuthStore();
+const router = useRouter();
 const auto = computed({
   get: () => ui.autoRefresh,
   set: (v: boolean) => ui.setAutoRefresh(v)
@@ -10,6 +14,11 @@ const auto = computed({
 
 function toggleDrawer(){
   ui.toggleDrawer();
+}
+
+async function logout(){
+  auth.logout();
+  await router.replace("/login");
 }
 </script>
 
@@ -26,6 +35,7 @@ function toggleDrawer(){
       <span class="track"></span>
       <span class="text">Auto</span>
     </label>
+    <button class="logout" @click="logout">Logout</button>
   </header>
 </template>
 
@@ -89,5 +99,14 @@ function toggleDrawer(){
 }
 .switch input:checked + .track::after{
   left: 23px;
+}
+.logout{
+  border: 1px solid rgba(15,23,42,.12);
+  background: rgba(255,255,255,.94);
+  color: rgba(15,23,42,.82);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>

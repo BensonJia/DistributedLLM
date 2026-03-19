@@ -1,9 +1,12 @@
 import datetime
+import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from server.deps import SessionLocal
 from server.request_queue.service import AwaitingRequestService
 from server.worker_registry.service import WorkerService
 from shared.config import ServerSettings
+
+logger = logging.getLogger(__name__)
 
 def start_heartbeat_cleanup():
     settings = ServerSettings()
@@ -16,6 +19,8 @@ def start_heartbeat_cleanup():
             offline_worker_ids = WorkerService(db).mark_offline_stale(cutoff)
             if offline_worker_ids:
                 AwaitingRequestService(db).release_assigned_requests(list(offline_worker_ids))
+        except Exception:
+            logger.exception("Heartbeat cleanup job failed")
         finally:
             db.close()
 

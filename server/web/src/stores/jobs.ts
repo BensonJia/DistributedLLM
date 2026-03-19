@@ -5,9 +5,10 @@ import { api } from "@/services/api";
 function normalizeJobSummary(j: JobSummary){
   return {
     job_id: j.job_id,
+    source: j.source,
     status: j.status,
     model: j.model,
-    assigned_worker_id: j.assigned_worker_id,
+    assigned_worker_id: j.assigned_worker_id ?? null,
     created_at: j.created_at ?? "",
     updated_at: j.updated_at ?? ""
   };
@@ -89,7 +90,8 @@ export const useJobsStore = defineStore("jobs", {
       if (!background) this.loading = true;
       if (!background) this.error = "";
       try{
-        const incoming = await api.listJobs();
+        const [jobs, awaiting] = await Promise.all([api.listJobs(), api.listAwaitingRequests()]);
+        const incoming = [...awaiting, ...jobs];
         const existingMap = new Map(this.jobs.map(j => [j.job_id, j]));
         const nextJobs = incoming.map((j) => {
           const existing = existingMap.get(j.job_id);
@@ -127,7 +129,10 @@ export const useJobsStore = defineStore("jobs", {
     async refreshSelected(background = true){
       if (!this.selectedId) return;
       try{
-        const incoming = await api.getJob(this.selectedId);
+        const selectedSummary = this.jobs.find((j) => j.job_id === this.selectedId);
+        const incoming = selectedSummary?.source === "awaiting"
+          ? await api.getAwaitingRequest(this.selectedId)
+          : await api.getJob(this.selectedId);
         if (!this.selected){
           this.selected = incoming;
           this.markSelectedMetaUpdated();

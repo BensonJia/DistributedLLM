@@ -4,6 +4,10 @@ from pydantic import Field
 class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DLLM_SERVER_", env_file=(".server_env", ".env"), extra="ignore")
     db_url: str = Field(default="sqlite:///./server.db")
+    db_pool_size: int = Field(default=30)
+    db_max_overflow: int = Field(default=60)
+    db_pool_timeout_sec: float = Field(default=30.0)
+    db_pool_recycle_sec: int = Field(default=1800)
     api_keys_bootstrap: str = Field(default="")
     internal_token: str = Field(default="")
     heartbeat_timeout_sec: int = Field(default=60)

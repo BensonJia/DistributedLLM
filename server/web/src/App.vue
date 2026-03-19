@@ -3,9 +3,12 @@ import AppShell from "@/layouts/AppShell.vue";
 </script>
 
 <template>
-  <AppShell>
-    <transition name="route" mode="out-in">
-      <router-view />
-    </transition>
-  </AppShell>
+  <router-view v-slot="{ Component, route: currentRoute }">
+    <AppShell v-if="currentRoute.meta.requiresAuth !== false">
+      <transition name="route" mode="out-in">
+        <component :is="Component" />
+      </transition>
+    </AppShell>
+    <component v-else :is="Component" />
+  </router-view>
 </template>

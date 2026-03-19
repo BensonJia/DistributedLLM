@@ -21,7 +21,7 @@ if settings.cors_allow_origins:
         allow_origins=origins,
         allow_credentials=bool(settings.cors_allow_credentials),
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-Worker-Token"],
     )
 
 

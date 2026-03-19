@@ -87,25 +87,24 @@ def list_models(_: str = Depends(require_api_key), db: Session = Depends(get_db)
 async def chat_completions(
     req: OpenAIChatCompletionRequest,
     token: str = Depends(require_api_key),
-    db: Session = Depends(get_db),
     x_dllm_forward_hop: int = Header(default=0, alias="X-DLLM-Forward-Hop"),
     x_dllm_seen_nodes: str = Header(default="", alias="X-DLLM-Seen-Nodes"),
 ):
     settings = ServerSettings()
-    worker_svc = WorkerService(db)
-    job_svc = JobService(db)
-    req_svc = AwaitingRequestService(db)
-    cluster_svc = ClusterService(db)
     req_id = new_req_id()
     job_id = None
     stream_local_cleanup_managed = False
 
     # Enqueue the request
-    req_svc.create(
-        req_id=req_id,
-        model_name=req.model,
-        payload=req.model_dump()
-    )
+    db0 = SessionLocal()
+    try:
+        AwaitingRequestService(db0).create(
+            req_id=req_id,
+            model_name=req.model,
+            payload=req.model_dump()
+        )
+    finally:
+        db0.close()
 
     # Poll for assignment
     assignment_timeout_sec = float(settings.request_timeout_sec)
@@ -113,7 +112,11 @@ async def chat_completions(
     assigned_worker_id = None
 
     try:
-        local_has_model = worker_svc.has_online_model(req.model)
+        db1 = SessionLocal()
+        try:
+            local_has_model = WorkerService(db1).has_online_model(req.model)
+        finally:
+            db1.close()
         can_forward = bool(settings.cluster_enabled) and int(x_dllm_forward_hop) < int(settings.cluster_request_max_hops)
         local_wait_budget = assignment_timeout_sec
         if can_forward:
@@ -139,11 +142,15 @@ async def chat_completions(
             if can_forward:
                 seen = {s.strip() for s in x_dllm_seen_nodes.split(",") if s.strip()}
                 seen.add(settings.cluster_node_id)
-                candidates = cluster_svc.choose_forward_candidates(
-                    model_name=req.model,
-                    max_candidates=int(settings.cluster_request_max_candidates),
-                    exclude_node_ids=seen,
-                )
+                dbf = SessionLocal()
+                try:
+                    candidates = ClusterService(dbf).choose_forward_candidates(
+                        model_name=req.model,
+                        max_candidates=int(settings.cluster_request_max_candidates),
+                        exclude_node_ids=seen,
+                    )
+                finally:
+                    dbf.close()
                 headers = {
                     "Authorization": f"Bearer {token}",
                     "X-DLLM-Forward-Hop": str(int(x_dllm_forward_hop) + 1),
@@ -199,20 +206,24 @@ async def chat_completions(
             raise HTTPException(status_code=503, detail=f"No available worker for model={req.model}")
 
         job_id = new_job_id()
-        worker_svc.set_job(assigned_worker_id, job_id)
-
-        payload = {
-            "job_id": job_id,
-            "model": req.model,
-            "messages": [m.model_dump() for m in req.messages],
-            "temperature": req.temperature,
-            "top_p": req.top_p,
-            "max_tokens": req.max_tokens,
-            "stream": req.stream,
-        }
         if req.stream:
             await job_stream_hub.ensure(job_id)
-        job_svc.create(job_id=job_id, model=req.model, assigned_worker_id=assigned_worker_id, payload=payload)
+        dbw = SessionLocal()
+        try:
+            WorkerService(dbw).set_job(assigned_worker_id, job_id)
+            job_svc = JobService(dbw)
+            payload = {
+                "job_id": job_id,
+                "model": req.model,
+                "messages": [m.model_dump() for m in req.messages],
+                "temperature": req.temperature,
+                "top_p": req.top_p,
+                "max_tokens": req.max_tokens,
+                "stream": req.stream,
+            }
+            job_svc.create(job_id=job_id, model=req.model, assigned_worker_id=assigned_worker_id, payload=payload)
+        finally:
+            dbw.close()
 
         if req.stream:
             stream_local_cleanup_managed = True

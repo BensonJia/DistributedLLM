@@ -5,6 +5,13 @@ import type { WorkerDetail, WorkerSummary, JobDetail, JobSummary, ClusterNode } 
 type WorkersResp = { workers: WorkerDetail[] };
 type JobsResp = { jobs: JobDetail[] };
 type ClusterNodesResp = { nodes: ClusterNode[] };
+type AwaitingReq = {
+  req_id: string;
+  status: string;
+  model: string;
+  assigned_worker_id?: string | null;
+  created_at?: string;
+};
 
 async function mockJson<T>(path: string): Promise<T>{
   const res = await fetch(path);
@@ -16,6 +23,11 @@ export const api = {
   async health(): Promise<{ok: boolean}>{
     if (USE_MOCK) return { ok: true };
     return await httpJson<{ok:boolean}>("/health", { method: "GET" });
+  },
+
+  async adminAuthCheck(): Promise<{ok: boolean}>{
+    if (USE_MOCK) return { ok: true };
+    return await httpJson<{ok:boolean}>("/admin/auth", { method: "GET" });
   },
 
   async listWorkers(): Promise<WorkerSummary[]>{
@@ -47,6 +59,7 @@ export const api = {
       const data = await mockJson<JobsResp>("/mock/jobs.json");
       return data.jobs.map(j => ({
         job_id: j.job_id,
+        source: "job",
         status: j.status,
         model: j.model,
         assigned_worker_id: j.assigned_worker_id,
@@ -54,7 +67,22 @@ export const api = {
         updated_at: j.updated_at
       }));
     }
-    return await httpJson<JobSummary[]>("/admin/jobs", { method: "GET" });
+    const rows = await httpJson<Array<Omit<JobSummary, "source">>>("/admin/jobs", { method: "GET" });
+    return rows.map((j) => ({ ...j, source: "job" }));
+  },
+
+  async listAwaitingRequests(): Promise<JobSummary[]>{
+    if (USE_MOCK) return [];
+    const rows = await httpJson<AwaitingReq[]>("/admin/awaiting-requests", { method: "GET" });
+    return rows.map((r) => ({
+      job_id: r.req_id,
+      source: "awaiting",
+      status: "awaiting",
+      model: r.model,
+      assigned_worker_id: r.assigned_worker_id ?? null,
+      created_at: r.created_at ?? "",
+      updated_at: r.created_at ?? ""
+    }));
   },
 
   async getJob(job_id: string): Promise<JobDetail>{
@@ -62,9 +90,25 @@ export const api = {
       const data = await mockJson<JobsResp>("/mock/jobs.json");
       const found = data.jobs.find(j => j.job_id === job_id);
       if (!found) throw new Error("job not found in mock");
-      return found;
+      return { ...found, source: "job" };
     }
-    return await httpJson<JobDetail>(`/admin/jobs/${encodeURIComponent(job_id)}`, { method: "GET" });
+    const row = await httpJson<Omit<JobDetail, "source">>(`/admin/jobs/${encodeURIComponent(job_id)}`, { method: "GET" });
+    return { ...row, source: "job" };
+  },
+
+  async getAwaitingRequest(req_id: string): Promise<JobDetail>{
+    const row = await httpJson<AwaitingReq>(`/admin/awaiting-requests/${encodeURIComponent(req_id)}`, { method: "GET" });
+    return {
+      job_id: row.req_id,
+      source: "awaiting",
+      status: "awaiting",
+      model: row.model,
+      assigned_worker_id: row.assigned_worker_id ?? null,
+      created_at: row.created_at ?? "",
+      updated_at: row.created_at ?? "",
+      result: null,
+      error: null
+    };
   },
 
   async listClusterNodes(): Promise<ClusterNode[]>{

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete, update, and_
 from .models import Worker, WorkerModel, WorkerModelStat
 import datetime
 

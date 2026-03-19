@@ -10,7 +10,7 @@ const store = useJobsStore();
 const ui = useUiStore();
 
 const q = ref("");
-const filter = ref<"all"|"pending"|"running"|"done"|"failed">("all");
+const filter = ref<"all"|"awaiting"|"pending"|"running"|"done"|"failed">("all");
 
 const sortedFiltered = computed(() => {
   const arr = [...store.jobs];
@@ -30,6 +30,7 @@ const sortedFiltered = computed(() => {
 function chipClass(j: JobSummary){
   if (j.status === "failed") return "chip dot err";
   if (j.status === "running") return "chip dot warn";
+  if (j.status === "awaiting") return "chip dot";
   if (j.status === "pending") return "chip dot";
   return "chip dot ok";
 }
@@ -56,6 +57,7 @@ function copy(text: string){
       <input class="input" v-model="q" placeholder="搜索 job_id…" />
       <div class="seg">
         <button class="seg-btn" :class="{active: filter==='all'}" @click="filter='all'">All</button>
+        <button class="seg-btn" :class="{active: filter==='awaiting'}" @click="filter='awaiting'">Awaiting</button>
         <button class="seg-btn" :class="{active: filter==='pending'}" @click="filter='pending'">Pending</button>
         <button class="seg-btn" :class="{active: filter==='running'}" @click="filter='running'">Running</button>
         <button class="seg-btn" :class="{active: filter==='done'}" @click="filter='done'">Done</button>
@@ -83,7 +85,7 @@ function copy(text: string){
         </div>
         <div class="mid">
           <div class="mono">{{ j.model }}</div>
-          <div class="muted">worker: <span class="mono">{{ shortId(j.assigned_worker_id) }}</span></div>
+          <div class="muted">worker: <span class="mono">{{ j.assigned_worker_id ? shortId(j.assigned_worker_id) : "—" }}</span></div>
         </div>
         <div class="bottom">
           <div class="muted" :title="formatIso(j.created_at)">

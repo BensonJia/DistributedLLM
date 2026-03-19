@@ -20,13 +20,15 @@ export interface WorkerDetail extends WorkerSummary {
   models: WorkerModelInfo[];
 }
 
-export type JobStatus = "pending" | "running" | "done" | "failed";
+export type JobStatus = "awaiting" | "pending" | "running" | "done" | "failed";
+export type JobSource = "job" | "awaiting";
 
 export interface JobSummary {
   job_id: string;
+  source: JobSource;
   status: JobStatus;
   model: string;
-  assigned_worker_id: string;
+  assigned_worker_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }

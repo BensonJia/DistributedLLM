@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from server.deps import get_db
-from server.api.auth_middleware import require_api_key
+from server.api.auth_middleware import require_internal_token
 from server.worker_registry.models import Worker, WorkerModel, WorkerModelStat
 from server.job_queue.models import Job
+from server.request_queue.models import AwaitingRequest
 from server.cluster.models import ClusterNode
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -26,8 +27,13 @@ def _iso(dt: Optional[datetime.datetime]) -> Optional[str]:
 def _work_state(worker: Worker) -> Literal["idle", "busy"]:
     return "busy" if worker.current_job_id else "idle"
 
+@router.get("/auth")
+def auth(_: str = Depends(require_internal_token)) -> dict:
+    return {"ok": True}
+
+
 @router.get("/workers")
-def list_workers(_: str = Depends(require_api_key), db: Session = Depends(get_db)) -> List[dict]:
+def list_workers(_: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> List[dict]:
     rows = db.execute(select(Worker).order_by(Worker.worker_id.asc())).scalars().all()
     return [{
         "worker_id": w.worker_id,
@@ -38,7 +44,7 @@ def list_workers(_: str = Depends(require_api_key), db: Session = Depends(get_db
     } for w in rows]
 
 @router.get("/workers/{worker_id}")
-def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = Depends(get_db)) -> dict:
+def get_worker(worker_id: str, _: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> dict:
     wobj = db.get(Worker, worker_id)
     if not wobj:
         raise HTTPException(status_code=404, detail="worker not found")
@@ -73,7 +79,7 @@ def get_worker(worker_id: str, _: str = Depends(require_api_key), db: Session = 
     }
 
 @router.get("/jobs")
-def list_jobs(_: str = Depends(require_api_key), db: Session = Depends(get_db)) -> List[dict]:
+def list_jobs(_: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> List[dict]:
     rows = db.execute(select(Job).order_by(Job.created_at.desc())).scalars().all()
     return [{
         "job_id": j.job_id,
@@ -84,8 +90,32 @@ def list_jobs(_: str = Depends(require_api_key), db: Session = Depends(get_db)) 
         "updated_at": _iso(j.updated_at),
     } for j in rows]
 
+@router.get("/awaiting-requests")
+def list_awaiting_requests(_: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> List[dict]:
+    rows = db.execute(select(AwaitingRequest).order_by(AwaitingRequest.created_at.desc())).scalars().all()
+    return [{
+        "req_id": r.req_id,
+        "status": r.status,
+        "model": r.model_name,
+        "assigned_worker_id": r.assigned_worker_id,
+        "created_at": _iso(r.created_at),
+    } for r in rows]
+
+@router.get("/awaiting-requests/{req_id}")
+def get_awaiting_request(req_id: str, _: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> dict:
+    req = db.execute(select(AwaitingRequest).where(AwaitingRequest.req_id == req_id)).scalar_one_or_none()
+    if not req:
+        raise HTTPException(status_code=404, detail="awaiting request not found")
+    return {
+        "req_id": req.req_id,
+        "status": req.status,
+        "model": req.model_name,
+        "assigned_worker_id": req.assigned_worker_id,
+        "created_at": _iso(req.created_at),
+    }
+
 @router.get("/jobs/{job_id}")
-def get_job(job_id: str, _: str = Depends(require_api_key), db: Session = Depends(get_db)) -> dict:
+def get_job(job_id: str, _: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> dict:
     job = db.execute(select(Job).where(Job.job_id == job_id)).scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
@@ -117,7 +147,7 @@ def get_job(job_id: str, _: str = Depends(require_api_key), db: Session = Depend
 
 
 @router.get("/cluster/nodes")
-def list_cluster_nodes(_: str = Depends(require_api_key), db: Session = Depends(get_db)) -> List[dict]:
+def list_cluster_nodes(_: str = Depends(require_internal_token), db: Session = Depends(get_db)) -> List[dict]:
     rows = db.execute(select(ClusterNode).order_by(ClusterNode.is_self.desc(), ClusterNode.node_id.asc())).scalars().all()
     out: List[dict] = []
     for n in rows:
