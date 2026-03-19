@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Literal, Optional, List, Dict
+from typing import Any, Literal, Optional, List, Dict, Annotated, Union
 from pydantic import BaseModel, Field
 
 class WorkerRegisterResponse(BaseModel):
@@ -47,9 +47,26 @@ class WorkerJobChunkRequest(BaseModel):
     job_id: str
     delta: str = ""
 
+class OpenAIImageURL(BaseModel):
+    url: str
+    detail: Optional[str] = None
+
+class OpenAITextContentPart(BaseModel):
+    type: Literal["text"]
+    text: str
+
+class OpenAIImageURLContentPart(BaseModel):
+    type: Literal["image_url"]
+    image_url: OpenAIImageURL
+
+OpenAIChatContentPart = Annotated[
+    Union[OpenAITextContentPart, OpenAIImageURLContentPart],
+    Field(discriminator="type"),
+]
+
 class OpenAIChatMessage(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
-    content: str
+    content: str | List[OpenAIChatContentPart]
 
 class OpenAIChatCompletionRequest(BaseModel):
     model: str

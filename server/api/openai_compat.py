@@ -12,6 +12,7 @@ from shared.schemas import (
     OpenAIModelList,
     OpenAIModelCard,
 )
+from shared.multimodal import openai_messages_to_ollama_messages
 from shared.utils import now_ts, new_job_id, new_req_id
 from server.deps import get_db, SessionLocal
 from server.api.auth_middleware import require_api_key
@@ -94,6 +95,10 @@ async def chat_completions(
     req_id = new_req_id()
     job_id = None
     stream_local_cleanup_managed = False
+    try:
+        worker_messages = openai_messages_to_ollama_messages(req.messages)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # Enqueue the request
     db0 = SessionLocal()
@@ -215,7 +220,7 @@ async def chat_completions(
             payload = {
                 "job_id": job_id,
                 "model": req.model,
-                "messages": [m.model_dump() for m in req.messages],
+                "messages": worker_messages,
                 "temperature": req.temperature,
                 "top_p": req.top_p,
                 "max_tokens": req.max_tokens,

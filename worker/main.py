@@ -6,8 +6,6 @@ from fastapi import FastAPI
 from shared.config import WorkerSettings
 from worker.worker_core.local_storage import LocalStorage
 from worker.worker_core.registration import register as register_worker
-from worker.ollama_adapter.client import OllamaClient
-from worker.ollama_adapter.inference import OllamaInference
 from worker.cost_engine.electricity_api import ConstantElectricityPrice
 from worker.cost_engine.power_api import (
     ActiveTaskRegistry,
@@ -23,6 +21,7 @@ from worker.heartbeat.state_collector import StateCollector
 from worker.heartbeat.reporter import HeartbeatReporter, build_heartbeat
 from worker.job_puller.client import JobPullClient
 from worker.job_puller.runner import JobRunner
+from worker.llm_runtime import build_runtime
 from worker.worker_api.health import router as health_router
 
 app = FastAPI(title="Distributed LLM Worker", version="0.2.0")
@@ -31,14 +30,15 @@ logger = logging.getLogger(__name__)
 settings = WorkerSettings()
 storage = LocalStorage(settings.worker_data_dir)
 
-ollama = OllamaClient(settings.ollama_url)
+runtime = build_runtime(settings)
+runtime_info = runtime.describe()
 price_provider = ConstantElectricityPrice(settings.electricity_fallback_price_per_kwh)
 power_runtime = LocalPowerApi(PlatformPowerReader(settings.host_power_watts), interval_sec=1.0)
 set_power_api_runtime(power_runtime)
 power_meter = LocalPowerMeter(power_runtime, fallback_watts=settings.host_power_watts)
 cost_calc = CostCalculator(settings, price_provider, power_meter)
-collector = StateCollector(ollama, cost_calc)
-infer = OllamaInference(ollama)
+collector = StateCollector(runtime, cost_calc)
+infer = runtime
 task_registry = ActiveTaskRegistry()
 power_ws_url = f"ws://127.0.0.1:{settings.listen_port}/internal/power/ws"
 power_attributor = TaskPowerAttributor(power_ws_url, task_registry, fallback_watts=settings.host_power_watts)
@@ -94,6 +94,9 @@ async def heartbeat_loop():
                 state,
                 meta={
                     "ollama_url": settings.ollama_url,
+                    "backend_name": runtime_info.get("default_backend"),
+                    "backend_routes": runtime_info.get("routes"),
+                    "backend_endpoints": runtime_info.get("backends"),
                     "model_speeds_tps": state.model_speeds_tps,
                     "model_avg_power_watts": state.model_avg_power_watts,
                 },
@@ -107,7 +110,12 @@ async def heartbeat_loop():
 async def startup():
     global _hb_task, _job_task
     _enable_debug_logging()
-    logger.info("Worker startup: server_url=%s ollama_url=%s", settings.server_url, settings.ollama_url)
+    logger.info(
+        "Worker startup: server_url=%s default_backend=%s ollama_url=%s",
+        settings.server_url,
+        runtime_info.get("default_backend"),
+        settings.ollama_url,
+    )
     _log_startup_env()
     await power_runtime.start()
     wid = await ensure_worker_id()
