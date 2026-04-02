@@ -9,8 +9,10 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Protocol
 
+import httpx
 import websockets
 from fastapi import APIRouter, WebSocket
+from typing import Callable
 
 from worker.cost_engine.PwrEngine.PwrLnx import PwrLnx
 from worker.cost_engine.PwrEngine.PwrMac import PwrMac
@@ -83,9 +85,15 @@ class PlatformPowerReader:
 
 
 class LocalPowerApi:
-    def __init__(self, reader: PlatformPowerReader, interval_sec: float = 1.0) -> None:
+    def __init__(
+        self,
+        reader: PlatformPowerReader,
+        interval_sec: float = 1.0,
+        sample_filter: Callable[[PowerSample], PowerSample] | None = None,
+    ) -> None:
         self.reader = reader
         self.interval_sec = max(0.2, float(interval_sec))
+        self.sample_filter = sample_filter
         self._latest: PowerSample | None = None
         self._task: asyncio.Task | None = None
         self._queues: set[asyncio.Queue[str]] = set()
@@ -111,6 +119,11 @@ class LocalPowerApi:
         while True:
             started = time.monotonic()
             sample = await asyncio.to_thread(self.reader.read)
+            if self.sample_filter is not None:
+                try:
+                    sample = self.sample_filter(sample)
+                except Exception as exc:
+                    logger.warning("Power sample filter failed, using raw sample: %s", exc)
             self._latest = sample
             payload = json.dumps({"type": "power_sample", **asdict(sample)}, ensure_ascii=False)
             async with self._lock:
@@ -170,6 +183,24 @@ class LocalPowerMeter(PowerMeterProtocol):
         return self.fallback_watts
 
 
+class RemotePowerMeter(PowerMeterProtocol):
+    def __init__(self, latest_url: str, fallback_watts: float, timeout_sec: float = 2.0) -> None:
+        self.latest_url = latest_url.rstrip("/")
+        self.fallback_watts = float(fallback_watts)
+        self.timeout_sec = float(timeout_sec)
+
+    async def get_power_watts(self) -> float:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
+                resp = await client.get(self.latest_url)
+                resp.raise_for_status()
+                data = resp.json()
+            watts = float(data.get("total_watts") or 0.0)
+            return watts if watts > 0 else self.fallback_watts
+        except Exception:
+            return self.fallback_watts
+
+
 class ActiveTaskRegistry:
     def __init__(self) -> None:
         self._active: set[str] = set()
@@ -226,7 +257,7 @@ class TaskPowerAttributor:
 
     async def track(self, job_id: str, stop_event: asyncio.Event) -> TaskPowerReport:
         await self.registry.start(job_id)
-        started = time.monotonic()
+        started = time.time()
         prev_ts = started
         prev_watts = self.fallback_watts
         weighted_watts_sec = 0.0
@@ -237,28 +268,31 @@ class TaskPowerAttributor:
                     try:
                         sample = await asyncio.wait_for(client.recv_sample(), timeout=2.5)
                     except asyncio.TimeoutError:
-                        now = time.monotonic()
+                        now = time.time()
                         seg = max(0.0, now - prev_ts)
+                        seg = min(seg, 10.0)
                         active = await self.registry.count()
                         weighted_watts_sec += seg * (prev_watts / active)
                         total_elapsed += seg
                         prev_ts = now
                         continue
 
-                    now_mono = float(sample.monotonic_ms) / 1000.0
-                    if now_mono <= 0:
-                        now_mono = time.monotonic()
-                    seg = max(0.0, now_mono - prev_ts)
+                    now_ts = float(sample.unix_ms) / 1000.0
+                    if now_ts <= 0:
+                        now_ts = time.time()
+                    seg = max(0.0, now_ts - prev_ts)
+                    seg = min(seg, 10.0)
                     active = await self.registry.count()
                     weighted_watts_sec += seg * (prev_watts / active)
                     total_elapsed += seg
-                    prev_ts = now_mono
+                    prev_ts = now_ts
                     prev_watts = max(0.0, float(sample.total_watts))
         except Exception as exc:
             logger.warning("Power websocket tracking failed for job=%s: %s", job_id, exc)
         finally:
-            ended = time.monotonic()
+            ended = time.time()
             seg = max(0.0, ended - prev_ts)
+            seg = min(seg, 10.0)
             active = await self.registry.count()
             weighted_watts_sec += seg * (prev_watts / active)
             total_elapsed += seg

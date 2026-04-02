@@ -16,10 +16,10 @@ class CostCalculator:
         self._model_speed_tps: dict[str, float] = {}
         self._model_avg_power_watts: dict[str, float] = {}
 
-    def record_inference_speed(self, model_name: str, total_tokens: int, elapsed_sec: float) -> float | None:
-        if total_tokens <= 0 or elapsed_sec <= 0:
+    def record_model_speed_tps(self, model_name: str, speed_tps: float) -> float | None:
+        if not model_name:
             return None
-        speed = float(total_tokens) / float(elapsed_sec)
+        speed = float(speed_tps)
         if speed <= 0:
             return None
         self._model_speed_tps[model_name] = speed

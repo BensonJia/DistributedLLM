@@ -40,10 +40,16 @@ class WorkerSettings(BaseSettings):
     internal_token: str = Field(default="")
     debug: bool = Field(default=False)
     startup_env_keys: str = Field(
-        default="DLLM_WORKER_SERVER_URL,DLLM_WORKER_OLLAMA_URL,DLLM_WORKER_LISTEN_PORT,DLLM_WORKER_DEBUG,DLLM_WORKER_STREAM_INTERVAL_SEC"
+        default="DLLM_WORKER_SERVER_URL,DLLM_WORKER_OLLAMA_URL,DLLM_WORKER_FASTFLOWLM_URL,DLLM_WORKER_FASTFLOWLM_API_KEY,DLLM_WORKER_FLM_MODELS,DLLM_WORKER_DEFAULT_BACKEND,DLLM_WORKER_POWER_SERVICE_HTTP_URL,DLLM_WORKER_POWER_SERVICE_WS_URL,DLLM_WORKER_LISTEN_PORT,DLLM_WORKER_DEBUG,DLLM_WORKER_STREAM_INTERVAL_SEC"
     )
     listen_port: int = Field(default=9001)
     ollama_url: str = Field(default="http://127.0.0.1:11434")
+    fastflowlm_url: str = Field(default="")
+    fastflowlm_api_key: str = Field(default="")
+    flm_models: str = Field(default="")
+    default_backend: str = Field(default="ollama")
+    power_service_http_url: str = Field(default="http://host.docker.internal:9002")
+    power_service_ws_url: str = Field(default="ws://host.docker.internal:9002/internal/power/ws")
     worker_data_dir: str = Field(default="./.worker_data")
     heartbeat_interval_sec: int = Field(default=20)
     job_pull_interval_sec: float = Field(default=2)

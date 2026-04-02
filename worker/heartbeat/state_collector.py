@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from worker.ollama_adapter.client import OllamaClient
+from shared.config import WorkerSettings
 from worker.cost_engine.calculator import CostCalculator
 
 @dataclass
@@ -13,11 +13,26 @@ class WorkerState:
     loaded_model: str | None
 
 class StateCollector:
-    def __init__(self, ollama: OllamaClient, cost_calc: CostCalculator):
-        self.ollama = ollama
+    def __init__(self, runtime, cost_calc: CostCalculator, settings: WorkerSettings):
+        self.runtime = runtime
         self.cost_calc = cost_calc
+        self.settings = settings
         self._active_jobs: set[str] = set()
         self._loaded_model: str | None = None
+
+    def _manual_flm_models(self) -> list[str]:
+        raw = (self.settings.flm_models or "").strip()
+        if not raw:
+            return []
+        models: list[str] = []
+        seen: set[str] = set()
+        for item in raw.split(","):
+            name = item.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            models.append(name)
+        return models
 
     def set_job(self, job_id: str | None, loaded_model: str | None):
         if job_id:
@@ -37,8 +52,11 @@ class StateCollector:
             self._loaded_model = None
 
     async def collect(self) -> WorkerState:
-        tags = await self.ollama.list_models()
-        names = [m.get("name") for m in tags if m.get("name")]
+        if self.runtime.default_backend_name == "fastflowlm":
+            names = self._manual_flm_models()
+        else:
+            tags = await self.runtime.list_models()
+            names = [m.get("name") for m in tags if m.get("name")]
         models = []
         model_speeds_tps: dict[str, float] = {}
         model_avg_power_watts: dict[str, float] = {}

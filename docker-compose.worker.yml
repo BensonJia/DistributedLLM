@@ -1,0 +1,37 @@
+services:
+  dllm-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: ${DOCKER_WORKER_IMAGE_NAME:-dllm-worker:latest}
+    container_name: ${DOCKER_WORKER_CONTAINER_NAME:-dllm-worker}
+    restart: unless-stopped
+    env_file:
+      - .worker_env
+    environment:
+      DLLM_WORKER_SERVER_URL: ${DLLM_WORKER_SERVER_URL:-http://host.docker.internal:8000}
+      DLLM_WORKER_INTERNAL_TOKEN: ${DLLM_WORKER_INTERNAL_TOKEN:-}
+      DLLM_WORKER_DEFAULT_BACKEND: ${DLLM_WORKER_DEFAULT_BACKEND:-ollama}
+      DLLM_WORKER_OLLAMA_URL: ${DLLM_WORKER_OLLAMA_URL:-http://host.docker.internal:11434}
+      DLLM_WORKER_FASTFLOWLM_URL: ${DLLM_WORKER_FASTFLOWLM_URL:-}
+      DLLM_WORKER_FASTFLOWLM_API_KEY: ${DLLM_WORKER_FASTFLOWLM_API_KEY:-}
+      DLLM_WORKER_FLM_MODELS: ${DLLM_WORKER_FLM_MODELS:-}
+      DLLM_WORKER_POWER_SERVICE_HTTP_URL: ${DLLM_WORKER_POWER_SERVICE_HTTP_URL:-http://host.docker.internal:9002}
+      DLLM_WORKER_POWER_SERVICE_WS_URL: ${DLLM_WORKER_POWER_SERVICE_WS_URL:-ws://host.docker.internal:9002/internal/power/ws}
+      DLLM_WORKER_LISTEN_PORT: ${DLLM_WORKER_LISTEN_PORT:-9001}
+      DLLM_WORKER_DATA_DIR: ${DLLM_WORKER_DATA_DIR:-/app/.worker_data}
+      DLLM_WORKER_DEBUG: ${DLLM_WORKER_DEBUG:-false}
+      DLLM_WORKER_HEARTBEAT_INTERVAL_SEC: ${DLLM_WORKER_HEARTBEAT_INTERVAL_SEC:-20}
+      DLLM_WORKER_JOB_POLL_INTERVAL_SEC: ${DLLM_WORKER_JOB_POLL_INTERVAL_SEC:-2}
+      DLLM_WORKER_STREAM_INTERVAL_SEC: ${DLLM_WORKER_STREAM_INTERVAL_SEC:-0.5}
+      DLLM_WORKER_ELECTRICITY_FALLBACK_PRICE_PER_KWH: ${DLLM_WORKER_ELECTRICITY_FALLBACK_PRICE_PER_KWH:-0.20}
+      DLLM_WORKER_BASE_COST_PER_TOKEN: ${DLLM_WORKER_BASE_COST_PER_TOKEN:-1e-7}
+      DLLM_WORKER_MODEL_SIZE_MULTIPLIER: ${DLLM_WORKER_MODEL_SIZE_MULTIPLIER:-1.0}
+      DLLM_WORKER_HOST_POWER_WATTS: ${DLLM_WORKER_HOST_POWER_WATTS:-250.0}
+    ports:
+      - "${DLLM_WORKER_LISTEN_PORT:-9001}:9001"
+    volumes:
+      - ./data/worker:/app/.worker_data
+      - ./.worker_env:/app/.worker_env:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

@@ -13,11 +13,20 @@ from urllib.request import urlopen
 def _parse_watts(raw: str) -> float:
     if not raw:
         return 0.0
-    token = raw.strip().split(" ", 1)[0]
+    text = raw.strip()
+    parts = text.split()
+    if not parts:
+        return 0.0
     try:
-        return float(token)
+        value = float(parts[0])
     except (TypeError, ValueError):
         return 0.0
+    unit = parts[1].lower() if len(parts) > 1 else "w"
+    if unit == "mw":
+        return value / 1000.0
+    if unit == "kw":
+        return value * 1000.0
+    return value
 
 
 @dataclass(slots=True)

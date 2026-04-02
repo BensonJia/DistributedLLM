@@ -11,6 +11,9 @@ class FastFlowLMClient:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
 
+    def _endpoint(self, path: str) -> str:
+        return self.base_url + path
+
     def _headers(self) -> dict[str, str] | None:
         if not self.api_key:
             return None
@@ -18,7 +21,7 @@ class FastFlowLMClient:
 
     async def list_models(self) -> list[dict]:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(self.base_url + "/v1/models", headers=self._headers())
+            r = await client.get(self._endpoint("/models"), headers=self._headers())
             r.raise_for_status()
             data = r.json().get("data", [])
             return [{"name": item.get("id")} for item in data if item.get("id")]
@@ -34,7 +37,7 @@ class FastFlowLMClient:
         if max_tokens is not None:
             payload["max_tokens"] = int(max_tokens)
         async with httpx.AsyncClient(timeout=None) as client:
-            r = await client.post(self.base_url + "/v1/chat/completions", json=payload, headers=self._headers())
+            r = await client.post(self._endpoint("/chat/completions"), json=payload, headers=self._headers())
             r.raise_for_status()
             return r.json()
 
@@ -59,7 +62,7 @@ class FastFlowLMClient:
         async with httpx.AsyncClient(timeout=None) as client:
             async with client.stream(
                 "POST",
-                self.base_url + "/v1/chat/completions",
+                self._endpoint("/chat/completions"),
                 json=payload,
                 headers=self._headers(),
             ) as resp:

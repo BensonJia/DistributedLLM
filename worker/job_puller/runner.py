@@ -68,6 +68,7 @@ class JobRunner:
                 started = time.perf_counter()
                 if self.settings.debug:
                     logger.debug("Comm[infer] start: job_id=%s", job.job_id)
+                eval_speed_tps = None
                 if job.stream:
                     stream_interval = max(0.05, float(self.settings.stream_interval_sec))
                     retry_interval = 1.0
@@ -144,7 +145,7 @@ class JobRunner:
                         name=f"stream-infer-{job.job_id}",
                     )
                     try:
-                        text, pt, ct, tt = await infer_task
+                        text, pt, ct, tt, eval_speed_tps = await infer_task
                     except asyncio.CancelledError:
                         if stream_abort.is_set():
                             raise RuntimeError(abort_reason)
@@ -155,7 +156,7 @@ class JobRunner:
                     if stream_abort.is_set():
                         raise RuntimeError(abort_reason)
                 else:
-                    text, pt, ct, tt = await self.infer.chat(
+                    text, pt, ct, tt, eval_speed_tps = await self.infer.chat(
                         model=job.model,
                         messages=job.messages,
                         temperature=job.temperature,
@@ -165,7 +166,11 @@ class JobRunner:
                 elapsed = time.perf_counter() - started
                 if self.settings.debug:
                     logger.debug("Comm[infer] done: job_id=%s total_tokens=%s elapsed=%.3fs", job.job_id, tt, elapsed)
-                self.cost_calc.record_inference_speed(job.model, tt, elapsed)
+                if eval_speed_tps is not None and float(eval_speed_tps) > 0:
+                    self.cost_calc.record_model_speed_tps(job.model, float(eval_speed_tps))
+                elif tt > 0 and elapsed > 0:
+                    # Fallback for backends that do not expose eval_duration.
+                    self.cost_calc.record_model_speed_tps(job.model, float(tt) / float(elapsed))
                 power_report = await self._finish_power_track(power_task, power_stop)
                 avg_power_watts = float(power_report.avg_power_watts) if power_report else None
                 if avg_power_watts:
